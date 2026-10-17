@@ -224,47 +224,215 @@ Merge and squash commit messages need no special prefix or trailer.
 Options follow the operation: `git vault save -s production .env`, or
 `git vault recipients add -s production age1...`.
 
-| Command | Purpose |
-| --- | --- |
-| `init -r KEY` | Initialize an independent vault branch and default section |
-| `sections list` | List sections |
-| `sections add NAME -r KEY` | Add a section |
-| `sections remove NAME` | Remove an empty, non-default section |
-| `recipients list` | List a section's public recipients |
-| `recipients add KEY...` | Add recipients and re-encrypt the section |
-| `recipients remove KEY...` | Remove recipients and re-encrypt the section |
-| `save PATH...` | Encrypt and commit files |
-| `list` | List saved paths |
-| `restore PATH...` | Decrypt files into the working tree |
-| `remove PATH...` | Remove files from the current saved snapshot |
+Paths are relative to the current directory; `-a` uses stored repository-relative
+paths. Use `--` before file names beginning with `-`. Force does not bypass symlink,
+path, or concurrent-update checks. Commit messages are public; never include
+secrets. When `-m` and `-F` are omitted, a message with a `git-vault:` prefix is
+generated.
+
+### `init`
+
+```sh
+git vault init [options] -r KEY [-r KEY ...]
+```
+
+Initialize an independent vault branch with a `default` section. The branch must not already exist. This command creates the branch itself and does not accept `-n` or `-B`.
 
 | Option | Purpose |
 | --- | --- |
-| `-h`, `--help` | Show help |
-| `-b`, `--branch NAME` | Target local branch (default: `vault`) |
-| `-s`, `--section NAME` | Target section (default: `default`) |
-| `-n`, `--new-branch` | Create the explicitly named target branch |
-| `-B`, `--base REF` | Creation base (default: `vault`) |
-| `-r`, `--recipient KEY` | Initial public recipient; repeat as needed |
-| `-i`, `--identity PATH` | Private identity file; repeat as needed |
-| `-m`, `--message TEXT` | Commit message; repeat for paragraphs |
-| `-F`, `--message-file PATH` | UTF-8 commit message file |
-| `-a`, `--all` | All saved paths in the section, for save/restore |
-| `-f`, `--force` | Allow tracked input for save; overwrite existing/tracked files for restore |
-| `-R`, `--revision REV` | Restore from a commit reachable from the target branch |
-| `-C`, `--no-color` | Disable ANSI colors (current output is plain text) |
+| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
+| `-r`, `--recipient KEY` | Required native age public recipient; repeat for multiple recipients. |
+| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
+| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
+| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
+| `-h`, `--help` | Show help. |
 
-Each operation accepts only its applicable options. Use `git vault <operation> -h`
-for details. Paths are relative to the current directory; `-a` uses stored
-repository-relative paths. Use `--` before names beginning with `-`.
+### `sections list`
 
-`save` and `restore` reject tracked paths unless `-f` is explicit. `save -f` reads
-the working-tree content, not the staged version. `restore -f` can overwrite
-uncommitted working-tree changes. Neither changes the index or application history.
-`-f` does not bypass symlink, path, or concurrent-update checks.
+```sh
+git vault sections list [options]
+```
 
-Exit codes: `0` success, `1` operation failure, `2` invalid arguments, `3` ref update
-or creation conflict.
+List all sections in the selected branch.
+
+| Option | Purpose |
+| --- | --- |
+| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
+| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
+| `-h`, `--help` | Show help. |
+
+### `sections add`
+
+```sh
+git vault sections add [options] NAME -r KEY [-r KEY ...]
+```
+
+Create the section named `NAME` with its own recipients and no files. The section must not already exist. Section names begin with an ASCII letter or digit and contain only letters, digits, `.`, `_`, and `-`.
+
+| Option | Purpose |
+| --- | --- |
+| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
+| `-r`, `--recipient KEY` | Required native age public recipient; repeat for multiple recipients. |
+| `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
+| `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
+| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
+| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
+| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
+| `-h`, `--help` | Show help. |
+
+### `sections remove`
+
+```sh
+git vault sections remove [options] NAME
+```
+
+Remove the section named `NAME`. It must be empty and cannot be `default`.
+
+| Option | Purpose |
+| --- | --- |
+| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
+| `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
+| `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
+| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
+| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
+| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
+| `-h`, `--help` | Show help. |
+
+### `recipients list`
+
+```sh
+git vault recipients list [options]
+```
+
+List public recipients for the selected section.
+
+| Option | Purpose |
+| --- | --- |
+| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
+| `-s`, `--section NAME` | Target section (default: `default`). |
+| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
+| `-h`, `--help` | Show help. |
+
+### `recipients add`
+
+```sh
+git vault recipients add [options] KEY...
+```
+
+Add the public recipients specified by `KEY...` and re-encrypt every saved file in the section in one commit. Existing recipients are rejected. A private identity is needed unless the section is empty.
+
+| Option | Purpose |
+| --- | --- |
+| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
+| `-s`, `--section NAME` | Target section (default: `default`). |
+| `-i`, `--identity PATH` | Private identity file; repeat for multiple files. If omitted, read stdin or prompt without echo. |
+| `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
+| `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
+| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
+| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
+| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
+| `-h`, `--help` | Show help. |
+
+### `recipients remove`
+
+```sh
+git vault recipients remove [options] KEY...
+```
+
+Remove the public recipients specified by `KEY...` and re-encrypt every saved file in the section in one commit. Unknown recipients and removal of the last recipient are rejected. A private identity is needed unless the section is empty. Past commits are unchanged.
+
+| Option | Purpose |
+| --- | --- |
+| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
+| `-s`, `--section NAME` | Target section (default: `default`). |
+| `-i`, `--identity PATH` | Private identity file; repeat for multiple files. If omitted, read stdin or prompt without echo. |
+| `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
+| `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
+| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
+| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
+| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
+| `-h`, `--help` | Show help. |
+
+### `save`
+
+```sh
+git vault save [options] PATH...
+git vault save [options] -a
+```
+
+Encrypt files and append a commit to the selected branch. Unspecified files are retained. Source plaintext is not deleted. Without `-f`, tracked input files are rejected.
+
+| Option | Purpose |
+| --- | --- |
+| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
+| `-s`, `--section NAME` | Target section (default: `default`). |
+| `-a`, `--all` | Re-save all registered paths in the section; mutually exclusive with explicit paths. Does not discover new files. |
+| `-f`, `--force` | Allow tracked input files. Read working-tree content, not the staged version; leave the index and application history unchanged. |
+| `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
+| `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
+| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
+| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
+| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
+| `-h`, `--help` | Show help. |
+
+### `list`
+
+```sh
+git vault list [options]
+```
+
+List the original repository-relative paths saved in the selected section.
+
+| Option | Purpose |
+| --- | --- |
+| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
+| `-s`, `--section NAME` | Target section (default: `default`). |
+| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
+| `-h`, `--help` | Show help. |
+
+### `restore`
+
+```sh
+git vault restore [options] PATH...
+git vault restore [options] -a
+```
+
+Decrypt files into the working tree. Without `-f`, existing files and tracked paths are rejected. Restored files have mode `0600`. This command does not create a commit or update the vault branch.
+
+| Option | Purpose |
+| --- | --- |
+| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
+| `-s`, `--section NAME` | Target section (default: `default`). |
+| `-i`, `--identity PATH` | Private identity file; repeat for multiple files. If omitted, read stdin or prompt without echo. |
+| `-a`, `--all` | Restore all saved paths in the selected section and revision; mutually exclusive with explicit paths. |
+| `-f`, `--force` | Overwrite existing or tracked files, including uncommitted working-tree changes; leave the index unchanged. |
+| `-R`, `--revision REV` | Restore from a commit reachable from the target branch (default: branch tip). |
+| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
+| `-h`, `--help` | Show help. |
+
+### `remove`
+
+```sh
+git vault remove [options] PATH...
+```
+
+Remove the specified paths from the current saved snapshot in one commit. Keep working-tree plaintext and historical commits. All specified paths must be saved in the selected section.
+
+| Option | Purpose |
+| --- | --- |
+| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
+| `-s`, `--section NAME` | Target section (default: `default`). |
+| `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
+| `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
+| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
+| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
+| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
+| `-h`, `--help` | Show help. |
+
+### Exit codes
+
+`0` success, `1` operation failure, `2` invalid arguments, `3` ref update or creation
+conflict.
 
 ## Storage and scope
 
