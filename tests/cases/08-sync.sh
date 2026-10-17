@@ -28,5 +28,5 @@ git fetch -q origin
 git vault save -b vault-change -n -B origin/vault .env
 git push -q origin vault-change
 assert_eq "$(git rev-parse vault-change^)" "$(git rev-parse origin/vault)"
-git show vault-change:sections/default/files/.env | age -d -i "$KEY1" >"$TEST_ROOT/decrypted"
+git show vault-change:default/files/.env | age -d -i "$KEY1" >"$TEST_ROOT/decrypted"
 assert_eq "$(cat "$TEST_ROOT/decrypted")" 'from B'

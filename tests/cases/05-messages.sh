@@ -5,7 +5,7 @@ git vault init -r "$RECIPIENT1" -m 'Initialize secrets'
 assert_eq "$(git log -1 --format=%B vault)" 'Initialize secrets'
 printf 'value\n' >.env
 git vault save .env
-assert_eq "$(git log -1 --format=%B vault)" $'git-vault: Save files in section default\n\n.env'
+assert_eq "$(git log -1 --format=%B vault)" $'git-vault: Save files in profile default\n\n.env'
 git vault save -m Title -m Body .env
 assert_eq "$(git log -1 --format=%B vault)" $'Title\n\nBody'
 printf 'Custom title\n\nCustom body\n' >"$TEST_ROOT/message"

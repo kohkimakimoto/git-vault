@@ -8,7 +8,7 @@ printf 'working tree\n' >app.txt
 remember_app_state
 expect_exit 1 git vault save app.txt
 git vault save --force app.txt
-git show vault:sections/default/files/app.txt | age -d -i "$KEY1" >"$TEST_ROOT/decrypted"
+git show vault:default/files/app.txt | age -d -i "$KEY1" >"$TEST_ROOT/decrypted"
 assert_eq "$(cat "$TEST_ROOT/decrypted")" 'working tree'
 rm app.txt
 expect_exit 1 git vault restore -i "$KEY1" app.txt

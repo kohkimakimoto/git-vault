@@ -21,7 +21,7 @@ DEFAULT_SKILL_PATH = ".agents/skills/git-vault/SKILL.md"
 
 SKILL_CONTENT = """---
 name: git-vault
-description: Save and restore encrypted project files with git-vault, including sections, recipients, and working branches for pull requests. Use when a project uses git-vault or the user asks to manage files with git vault.
+description: Save and restore encrypted project files with git-vault, including profiles, recipients, and working branches for pull requests. Use when a project uses git-vault or the user asks to manage files with git vault.
 ---
 
 # git-vault
@@ -58,24 +58,26 @@ works after installation or repair before continuing.
 
 ## Choose the target
 
-The default local branch is `vault` and the default section is `default`.
-Sections group files and recipients within the same branch. Before updating an
-existing vault, inspect its sections, saved paths, and public recipients:
+The default local branch is `vault` and the default profile is `default`.
+Each profile is a root directory in that branch, with public keys at
+`<profile>/recipients` and ciphertext at `<profile>/files/<original-path>`.
+Profiles group files and recipients within the same branch. Before updating an
+existing vault, inspect its profiles, saved paths, and public recipients:
 
 ```sh
-git vault sections list
-git vault list -s production
-git vault recipients list -s production
+git vault profiles list
+git vault list -p production
+git vault recipients list -p production
 ```
 
-Use the section and branch requested by the user or established by the project;
+Use the profile and branch requested by the user or established by the project;
 do not infer production from a filename. Paths are relative to the current
 directory. Prefer explicit paths when the task concerns only some files.
 
 ## Save files
 
 ```sh
-git vault save -s production -m "Update application secrets" -- .env
+git vault save -p production -m "Update application secrets" -- .env
 ```
 
 This creates a local commit on the selected branch, keeps source plaintext, and
@@ -85,8 +87,8 @@ Use `-b NAME` to update an existing vault working branch.
 For a pull-request workflow, create a new branch explicitly:
 
 ```sh
-git vault save -s production -b vault-update-secrets -n -B origin/vault -- .env
-git vault save -s production -b vault-update-secrets -- credentials.json
+git vault save -p production -b vault-update-secrets -n -B origin/vault -- .env
+git vault save -p production -b vault-update-secrets -- credentials.json
 ```
 
 `-n` requires an explicit `-b` and rejects an existing branch. `-B` requires `-n`
@@ -94,16 +96,16 @@ and defaults to local `vault`; `origin/vault` must already have been fetched.
 Do not use `vault/update-secrets`: Git cannot have both `vault` and that name.
 Updating a branch checked out in any worktree is rejected.
 
-`save -a` re-saves every registered path in the selected section, not new files.
-Use it only when the task calls for the entire section; a missing source fails
+`save -a` re-saves every registered path in the selected profile, not new files.
+Use it only when the task calls for the entire profile; a missing source fails
 the operation. Commit messages are public. Omit `-m` for a generated message
 prefixed with `git-vault:`; never put secret values in a message.
 
 ## Restore files
 
 ```sh
-git vault restore -s production -i /path/to/identity -- .env
-git vault restore -s production -- .env < /path/to/identity
+git vault restore -p production -i /path/to/identity -- .env
+git vault restore -p production -- .env < /path/to/identity
 ```
 
 Use an identity file or redirect its contents without reading or printing private
@@ -113,7 +115,7 @@ prompts without echo. Prefer file input for noninteractive agent execution.
 
 Restore writes plaintext files with mode `0600`. Do not print restored secrets;
 inspect names and command exit status when contents are unnecessary to the task.
-`restore -a` restores the whole section. `-R REV` restores a historical commit
+`restore -a` restores the whole profile. `-R REV` restores a historical commit
 reachable from the selected branch.
 
 Existing files and tracked paths are rejected by default. Use `restore -f` only
@@ -132,23 +134,23 @@ exists, use that history instead of creating an independent vault:
 git branch --track vault origin/vault
 ```
 
-For a new vault or section, obtain the intended public recipients from the user
+For a new vault or profile, obtain the intended public recipients from the user
 or project context. Native age public keys start with `age1`.
 
 ```sh
 git vault init -r age1...
-git vault sections add production -r age1...
-git vault recipients add -s production -i /path/to/identity age1...
-git vault recipients remove -s production -i /path/to/identity age1...
-git vault remove -s production -- .env
-git vault sections remove production
+git vault profiles add production -r age1...
+git vault recipients add -p production -i /path/to/identity age1...
+git vault recipients remove -p production -i /path/to/identity age1...
+git vault remove -p production -- .env
+git vault profiles remove production
 ```
 
 Repeat `-r` to initialize with multiple recipients. Recipient changes re-encrypt
-all files in the selected section and commit the list and ciphertext together;
-an identity that can decrypt every file is needed unless the section is empty.
+all files in the selected profile and commit the list and ciphertext together;
+an identity that can decrypt every file is needed unless the profile is empty.
 Failure leaves the branch unchanged. The last recipient cannot be removed.
-Sections can be removed only when empty, and `default` cannot be removed.
+Profiles can be removed only when empty, and `default` cannot be removed.
 These updates also support `-b`, `-n`, and `-B` (except `init`).
 
 ## Git integration and limits
@@ -160,14 +162,14 @@ creating a working branch, select the intended current base explicitly.
 
 Do not auto-merge ciphertext or force-push a divergent vault. Retain the needed
 local changes and reapply them from the latest base. If recipients in the same
-section changed since the working branch was created, re-save against the updated
+profile changed since the working branch was created, re-save against the updated
 list before merging; a conflict-free Git merge alone does not ensure consistency.
 
 Ignore settings are the user's responsibility; git-vault does not manage them.
 Saving keeps plaintext, restoring creates plaintext, and removal only changes the
 current vault snapshot. Clones and history retain old ciphertext, so deleting a
 file or recipient does not revoke access to past versions. File names, recipients,
-section names, sizes, and commit metadata are public within the repository.
+profile names, sizes, and commit metadata are public within the repository.
 
 On failure, inspect stderr without exposing keys or plaintext. Exit codes are
 0 for success, 1 for operation failure, 2 for invalid arguments, and 3 for a
@@ -219,9 +221,9 @@ def run(command, data=None, cwd=None, check=True, private=False):
     return result
 
 
-def valid_section(name):
+def valid_profile(name):
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name):
-        raise VaultError(f"Invalid section name: {name}", 2)
+        raise VaultError(f"Invalid profile name: {name}", 2)
     return name
 
 
@@ -292,7 +294,7 @@ def decrypt(data, paths):
 
 
 @dataclass
-class Section:
+class Profile:
     recipients: list
     files: dict
 
@@ -346,7 +348,7 @@ class Repository:
             raise VaultError(f"Target branch is checked out in a worktree: {ref}")
 
     def load(self, oid):
-        sections = {}
+        profiles = {}
         directories = set()
         entries = self.git("ls-tree", "-r", "-t", "-z", oid).stdout.split(b"\0")
         for entry in filter(None, entries):
@@ -363,44 +365,44 @@ class Repository:
             if mode != "100644" or kind != "blob":
                 raise VaultError(f"Unsupported vault tree entry: {name}")
             parts = name.split("/")
-            if len(parts) < 3 or parts[0] != "sections":
+            if len(parts) < 2:
                 raise VaultError(f"Not a vault tree: unexpected entry {name}")
-            section_name = valid_section(parts[1])
-            section = sections.setdefault(section_name, Section([], {}))
-            if len(parts) == 3 and parts[2] == "recipients":
+            profile_name = valid_profile(parts[0])
+            profile = profiles.setdefault(profile_name, Profile([], {}))
+            if len(parts) == 2 and parts[1] == "recipients":
                 try:
                     text = self.blob(object_id).decode("utf-8")
                 except UnicodeError:
                     raise VaultError("Recipients must be UTF-8.") from None
                 keys = text.splitlines()
                 if not text.endswith("\n") or keys != sorted(set(keys)):
-                    raise VaultError(f"Invalid recipients file in section {section_name}")
-                section.recipients = recipient_list(keys)
-            elif len(parts) >= 4 and parts[2] == "files":
-                section.files[valid_path("/".join(parts[3:]))] = object_id
+                    raise VaultError(f"Invalid recipients file in profile {profile_name}")
+                profile.recipients = recipient_list(keys)
+            elif len(parts) >= 3 and parts[1] == "files":
+                profile.files[valid_path("/".join(parts[2:]))] = object_id
             else:
                 raise VaultError(f"Unexpected vault entry: {name}")
-        if "default" not in sections or any(not s.recipients for s in sections.values()):
-            raise VaultError("Not a vault tree: default section and recipients are required.")
-        allowed = {"sections"}
-        for name, section in sections.items():
-            base = f"sections/{name}"
+        if "default" not in profiles or any(not s.recipients for s in profiles.values()):
+            raise VaultError("Not a vault tree: default profile and recipients are required.")
+        allowed = set()
+        for name, profile in profiles.items():
+            base = name
             allowed.update((base, base + "/files"))
-            for path in section.files:
+            for path in profile.files:
                 pieces = path.split("/")
                 for length in range(1, len(pieces)):
                     allowed.add(base + "/files/" + "/".join(pieces[:length]))
         if directories - allowed:
             raise VaultError("Vault tree contains unexpected directories.")
-        return sections
+        return profiles
 
-    def tree(self, sections):
+    def tree(self, profiles):
         flat = {}
-        for name, section in sections.items():
-            base = f"sections/{name}/"
+        for name, profile in profiles.items():
+            base = f"{name}/"
             flat[base + "recipients"] = self.hash_blob(
-                ("\n".join(section.recipients) + "\n").encode())
-            for path, oid in section.files.items():
+                ("\n".join(profile.recipients) + "\n").encode())
+            for path, oid in profile.files.items():
                 flat[base + "files/" + path] = oid
         nested = {}
         for path, oid in flat.items():
@@ -426,9 +428,9 @@ class Repository:
             return self.git("mktree", "-z", data=b"".join(entries)).stdout.decode().strip()
         return write(nested)
 
-    def commit(self, ref, old_oid, parent, sections, message):
+    def commit(self, ref, old_oid, parent, profiles, message):
         self.ensure_not_checked_out(ref)
-        tree = self.tree(sections)
+        tree = self.tree(profiles)
         if parent:
             old_tree = self.git("rev-parse", parent + "^{tree}").stdout.decode().strip()
             if tree == old_tree:
@@ -489,12 +491,12 @@ def message_for(args, paths=()):
         operation = args.operation
         if operation == "init":
             title = "Initialize vault"
-        elif operation.startswith("sections-"):
-            title = f"{operation.split('-')[1].capitalize()} section {args.name}"
+        elif operation.startswith("profiles-"):
+            title = f"{operation.split('-')[1].capitalize()} profile {args.name}"
         elif operation.startswith("recipients-"):
-            title = f"{operation.split('-')[1].capitalize()} recipients in section {args.section}"
+            title = f"{operation.split('-')[1].capitalize()} recipients in profile {args.profile}"
         else:
-            title = f"{operation.capitalize()} files in section {args.section}"
+            title = f"{operation.capitalize()} files in profile {args.profile}"
         message = "git-vault: " + title
         if paths:
             message += "\n\n" + "\n".join(paths)
@@ -503,19 +505,19 @@ def message_for(args, paths=()):
     return message
 
 
-def targets(repo, args, section):
+def targets(repo, args, profile):
     if args.all:
-        return sorted(section.files)
+        return sorted(profile.files)
     names = [repo.relative_path(path) for path in args.paths]
     return sorted(set(names))
 
 
-def restore(repo, args, section, names):
+def restore(repo, args, profile, names):
     tracked = repo.tracked()
     destinations = []
     for name in names:
-        if name not in section.files:
-            raise VaultError(f"File is not saved in this section: {name}")
+        if name not in profile.files:
+            raise VaultError(f"File is not saved in this profile: {name}")
         path = repo.local_path(name)
         if not args.force and (path.exists() or name.encode() in tracked):
             raise VaultError(f"Refusing to overwrite existing or tracked file: {name}. Use -f.")
@@ -524,7 +526,7 @@ def restore(repo, args, section, names):
         print("No files.")
         return
     with identities(args.identity) as keys:
-        contents = [decrypt(repo.blob(section.files[name]), keys) for name in names]
+        contents = [decrypt(repo.blob(profile.files[name]), keys) for name in names]
     # Reject duplicate normalized destinations before writing any plaintext.
     aliases = [os.path.normcase(str(path.resolve())) for path in destinations]
     if len(set(aliases)) != len(aliases):
@@ -571,15 +573,15 @@ def execute(args):
     branch = args.branch or "vault"
     ref = repo.branch_ref(branch)
     old_oid = repo.branch_oid(ref)
-    update = args.operation not in ("list", "restore", "sections-list", "recipients-list")
+    update = args.operation not in ("list", "restore", "profiles-list", "recipients-list")
     if update:
         repo.ensure_not_checked_out(ref)
     if args.operation == "init":
         if old_oid:
             raise VaultError(f"Branch already exists: {branch}")
         message = message_for(args)
-        sections = {"default": Section(validate_recipients(args.recipient), {})}
-        repo.commit(ref, None, None, sections, message)
+        profiles = {"default": Profile(validate_recipients(args.recipient), {})}
+        repo.commit(ref, None, None, profiles, message)
         return
     new = getattr(args, "new_branch", False)
     if new:
@@ -595,35 +597,35 @@ def execute(args):
         source = repo.commit_oid(args.revision)
         if repo.git("merge-base", "--is-ancestor", source, parent, check=False).returncode:
             raise VaultError("Revision is not reachable from the selected branch.")
-    sections = repo.load(source)
-    if args.operation.startswith("sections-"):
+    profiles = repo.load(source)
+    if args.operation.startswith("profiles-"):
         action = args.operation.split("-")[1]
         if action == "list":
-            print("\n".join(sorted(sections)))
+            print("\n".join(sorted(profiles)))
             return
-        name = valid_section(args.name)
+        name = valid_profile(args.name)
         if action == "add":
-            if name in sections:
-                raise VaultError(f"Section already exists: {name}")
-            sections[name] = Section(validate_recipients(args.recipient), {})
+            if name in profiles:
+                raise VaultError(f"Profile already exists: {name}")
+            profiles[name] = Profile(validate_recipients(args.recipient), {})
         else:
-            if name not in sections:
-                raise VaultError(f"Section does not exist: {name}")
-            if name == "default" or sections[name].files:
-                raise VaultError("Only empty, non-default sections can be removed.")
-            del sections[name]
-        repo.commit(ref, old_oid, parent, sections, message_for(args))
+            if name not in profiles:
+                raise VaultError(f"Profile does not exist: {name}")
+            if name == "default" or profiles[name].files:
+                raise VaultError("Only empty, non-default profiles can be removed.")
+            del profiles[name]
+        repo.commit(ref, old_oid, parent, profiles, message_for(args))
         return
-    valid_section(args.section)
-    if args.section not in sections:
-        raise VaultError(f"Section does not exist: {args.section}")
-    section = sections[args.section]
+    valid_profile(args.profile)
+    if args.profile not in profiles:
+        raise VaultError(f"Profile does not exist: {args.profile}")
+    profile = profiles[args.profile]
     if args.operation == "recipients-list":
-        print("\n".join(section.recipients))
+        print("\n".join(profile.recipients))
         return
     if args.operation.startswith("recipients-"):
         supplied = recipient_list(args.keys)
-        existing = set(section.recipients)
+        existing = set(profile.recipients)
         if args.operation == "recipients-add":
             if existing.intersection(supplied):
                 raise VaultError("A recipient is already present.")
@@ -633,29 +635,29 @@ def execute(args):
                 raise VaultError("A recipient is not present.")
             keys = validate_recipients(existing.difference(supplied))
         message = message_for(args)
-        if section.files:
+        if profile.files:
             with identities(args.identity) as identity_paths:
                 files = {name: repo.hash_blob(encrypt(decrypt(repo.blob(oid), identity_paths), keys))
-                         for name, oid in section.files.items()}
-            section.files = files
-        section.recipients = keys
-        repo.commit(ref, old_oid, parent, sections, message)
+                         for name, oid in profile.files.items()}
+            profile.files = files
+        profile.recipients = keys
+        repo.commit(ref, old_oid, parent, profiles, message)
         return
     if args.operation == "list":
-        if section.files:
-            print("\n".join(sorted(section.files)))
+        if profile.files:
+            print("\n".join(sorted(profile.files)))
         return
-    names = targets(repo, args, section)
+    names = targets(repo, args, profile)
     if args.operation == "restore":
-        restore(repo, args, section, names)
+        restore(repo, args, profile, names)
         return
     message = message_for(args, names)
     if args.operation == "remove":
         for name in names:
-            if name not in section.files:
-                raise VaultError(f"File is not saved in this section: {name}")
+            if name not in profile.files:
+                raise VaultError(f"File is not saved in this profile: {name}")
         for name in names:
-            del section.files[name]
+            del profile.files[name]
     else:
         tracked = repo.tracked()
         paths = []
@@ -667,11 +669,11 @@ def execute(args):
                 raise VaultError(f"Refusing to save tracked file: {name}. Use -f.")
             paths.append(path)
         for name, path in zip(names, paths):
-            section.files[name] = repo.hash_blob(encrypt(path.read_bytes(), section.recipients))
+            profile.files[name] = repo.hash_blob(encrypt(path.read_bytes(), profile.recipients))
     if not names:
         print("No files.")
         return
-    repo.commit(ref, old_oid, parent, sections, message)
+    repo.commit(ref, old_oid, parent, profiles, message)
 
 
 def parser_for_cli():
@@ -679,7 +681,7 @@ def parser_for_cli():
 
 Examples:
   git vault init -r age1...
-  git vault save -s production -m 'Rotate credentials' -- .env
+  git vault save -p production -m 'Rotate credentials' -- .env
   git vault restore -a < /path/to/identity
   git vault save -b vault-update -n -B origin/vault -- .env
 
@@ -707,7 +709,7 @@ Plaintext exclusion is your responsibility; ignore settings are never modified.
     skill.add_argument("-f", "--force", action="store_true",
                        help="Overwrite an existing output file; requires -o.")
 
-    def leaf(group, name, operation, description, section=False, update=False,
+    def leaf(group, name, operation, description, profile=False, update=False,
              create=False, identity=False, recipient=False):
         p = group.add_parser(name, description=description, help=description,
                              epilog=epilog, formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -715,9 +717,9 @@ Plaintext exclusion is your responsibility; ignore settings are never modified.
         p.set_defaults(operation=operation)
         p.add_argument("-b", "--branch", metavar="NAME", help="Select a local branch (default: vault).")
         p.add_argument("-C", "--no-color", action="store_true", help="Disable ANSI colors.")
-        if section:
-            p.add_argument("-s", "--section", default="default", metavar="NAME",
-                           help="Select a section (default: default).")
+        if profile:
+            p.add_argument("-p", "--profile", default="default", metavar="NAME",
+                           help="Select a profile (default: default).")
         if update:
             messages = p.add_mutually_exclusive_group()
             messages.add_argument("-m", "--message", action="append", metavar="TEXT",
@@ -739,28 +741,28 @@ Plaintext exclusion is your responsibility; ignore settings are never modified.
 
     leaf(commands, "init", "init", "Initialize an independent vault branch.",
          update=True, recipient=True)
-    for name in ("sections", "recipients"):
+    for name in ("profiles", "recipients"):
         group_parser = commands.add_parser(name, help=f"Manage {name}.")
         group = group_parser.add_subparsers(dest="action", required=True)
-        leaf(group, "list", name + "-list", f"List {name}.", section=name == "recipients")
+        leaf(group, "list", name + "-list", f"List {name}.", profile=name == "recipients")
         for action in ("add", "remove"):
             p = leaf(group, action, name + "-" + action, f"{action.capitalize()} {name}.",
-                     section=name == "recipients", update=True, create=True,
-                     identity=name == "recipients", recipient=name == "sections" and action == "add")
-            if name == "sections":
-                p.add_argument("name", metavar="NAME", help="Name the section.")
+                     profile=name == "recipients", update=True, create=True,
+                     identity=name == "recipients", recipient=name == "profiles" and action == "add")
+            if name == "profiles":
+                p.add_argument("name", metavar="NAME", help="Name the profile.")
             else:
                 p.add_argument("keys", nargs="+", metavar="KEY", help="Specify native age public keys.")
-    leaf(commands, "list", "list", "List saved paths in a section.", section=True)
+    leaf(commands, "list", "list", "List saved paths in a profile.", profile=True)
     for operation in ("save", "restore", "remove"):
         p = leaf(commands, operation, operation,
                  {"save": "Encrypt files and commit them without changing your checkout.",
                   "restore": "Decrypt files into the working tree.",
                   "remove": "Remove saved files from the current snapshot; keep plaintext and history."}[operation],
-                 section=True, update=operation != "restore", create=operation != "restore",
+                 profile=True, update=operation != "restore", create=operation != "restore",
                  identity=operation == "restore")
         if operation in ("save", "restore"):
-            p.add_argument("-a", "--all", action="store_true", help="Use all saved paths in this section; excludes explicit paths.")
+            p.add_argument("-a", "--all", action="store_true", help="Use all saved paths in this profile; excludes explicit paths.")
             p.add_argument("-f", "--force", action="store_true",
                            help=("Allow tracked input files. Existing plaintext and Git history are not removed."
                                  if operation == "save" else

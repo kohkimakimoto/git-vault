@@ -18,7 +18,7 @@ saved="$(git rev-parse vault)"
 assert_eq "$(git rev-parse vault^)" "$initial"
 assert_eq "$(git vault list | wc -l | tr -d ' ')" 6
 # The suffix is not added, so these two original paths coexist.
-git show vault:sections/default/files/config >"$TEST_ROOT/ciphertext"
+git show vault:default/files/config >"$TEST_ROOT/ciphertext"
 age -d -i "$KEY1" "$TEST_ROOT/ciphertext" >"$TEST_ROOT/decrypted"
 cmp "$TEST_ROOT/expected" "$TEST_ROOT/decrypted"
 rm -- .env 'space name' '日本語' '-leading' config config.age/token
@@ -40,8 +40,8 @@ expect_exit 1 git vault save -a
 assert_eq "$(git rev-parse vault)" "$before"
 git vault remove .env
 [[ -f .env ]] || fail 'remove deleted plaintext'
-expect_exit 128 git show vault:sections/default/files/.env
-git show "$saved:sections/default/files/.env" >/dev/null
+expect_exit 128 git show vault:default/files/.env
+git show "$saved:default/files/.env" >/dev/null
 assert_app_unchanged
 
 # Plaintext and private identities must not appear in any stored blob.

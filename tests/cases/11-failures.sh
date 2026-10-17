@@ -11,7 +11,7 @@ rm first second
 bad_blob="$(printf 'not age' | git hash-object -w --stdin)"
 export GIT_INDEX_FILE="$TEST_ROOT/fixture-index"
 git read-tree vault
-git update-index --cacheinfo "100644,$bad_blob,sections/default/files/second"
+git update-index --cacheinfo "100644,$bad_blob,default/files/second"
 tree="$(git write-tree)"
 unset GIT_INDEX_FILE
 commit="$(git commit-tree "$tree" -p vault -m 'Corrupt ciphertext fixture')"
