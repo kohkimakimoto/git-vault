@@ -1,14 +1,29 @@
 # git-vault
 
-Store age-encrypted files in a Git branch, separate from your application code.
+Store encrypted files in a Git branch, separate from your application code.
 
-`git vault` is a single Python script for personal projects that need to keep files
-such as `.env` in their repository without putting encrypted files or configuration
-on the application branch. It uses [age](https://github.com/FiloSottile/age) for
-cryptography and Git for storage. No Python packages or secret-management service
-are required.
+Managing secrets such as API keys and passwords means balancing risk against
+operational cost. There are many ways to do it; for smaller projects, encrypting
+secret files and committing them to the repository can be a practical choice.
+
+`git vault` supports that workflow. It keeps files such as `.env` encrypted on a
+dedicated branch in the same repository, so secrets can be managed alongside the
+code using familiar Git workflows, without adding encrypted files or configuration
+to the application branch.
+
+This approach has limits: encrypted secrets are copied when the repository is
+cloned and remain in commit history, making complete deletion difficult.
+git-vault was built for projects where the convenience of keeping code and secrets
+in one repository is worth that trade-off.
 
 ## Requirements
+
+git-vault is an external Git subcommand: Git allows an executable named `git-xxx`
+on your PATH to be invoked as `git xxx` (see the
+[Git documentation on PATH](https://git-scm.com/docs/git#Documentation/git.txt-PATH)).
+The `git-vault` executable is a Python script that uses
+[age](https://github.com/FiloSottile/age) for encryption and Git for storage, with
+no third-party Python packages. To run it, you need:
 
 - Python 3.11 or later
 - Git
@@ -478,7 +493,7 @@ Every file under `files/` is binary age ciphertext, regardless of its name. Orig
 relative paths are preserved without extra extensions. Recipients are public,
 one per line. File names, sizes, section names, and Git metadata remain visible.
 
-The tool is intended for small files in personal application repositories. It does
+The tool is intended for small files in application repositories. It does
 not provide secure deletion, key storage, access revocation for old commits, or
 automatic conflict resolution. Removing a saved file leaves its history intact.
 Only regular files inside the working tree are supported; directories, symlinks,
