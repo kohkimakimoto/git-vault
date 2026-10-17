@@ -316,3 +316,11 @@ and Python (for git-vault itself) are required. A small Python helper drives the
 real CLI through a terminal for the interactive-input test. If PTY allocation is
 unavailable, that check is explicitly reported as skipped. Tests never import
 git-vault's implementation.
+
+## Author
+
+Kohki Makimoto <kohki.makimoto@gmail.com>
+
+## License
+
+The MIT License (MIT)
