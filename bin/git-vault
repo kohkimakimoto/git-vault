@@ -15,7 +15,7 @@ import subprocess
 import sys
 import tempfile
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 DEFAULT_SKILL_PATH = ".agents/skills/git-vault/SKILL.md"
 
@@ -29,6 +29,32 @@ description: Save and restore encrypted project files with git-vault, including 
 Use `git vault` to manage encrypted files on a separate Git branch without
 switching the application checkout. Python 3.11+, Git, and age are required.
 Use `git vault <command> -h` for details; options follow the operation name.
+
+Official repository: https://github.com/kohkimakimoto/git-vault
+Use its [README](https://github.com/kohkimakimoto/git-vault#readme) for documentation
+and [source code](https://github.com/kohkimakimoto/git-vault/blob/main/bin/git-vault)
+when command behavior or implementation details need clarification.
+
+## Check availability
+
+Before performing vault operations, check that the command can run:
+
+```sh
+git vault version
+```
+
+If git-vault is not installed or not found on PATH, consult the official
+repository's [installation instructions](https://github.com/kohkimakimoto/git-vault#installation).
+Research the current installation options and prerequisites for the user's
+environment, then propose the appropriate commands. Install it only when that
+is within the user's requested scope; otherwise provide the proposal and wait
+before attempting vault operations. If the documentation cannot be reached,
+explain what could not be verified instead of inventing installation steps.
+
+If the command exists but fails, inspect the error and distinguish a missing
+installation from Python, PATH, or other dependency problems. Use the repository
+as the information source for troubleshooting, and confirm `git vault version`
+works after installation or repair before continuing.
 
 ## Choose the target
 
