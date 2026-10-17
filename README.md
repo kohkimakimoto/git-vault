@@ -429,6 +429,19 @@ Remove the specified paths from the current saved snapshot in one commit. Keep w
 | `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
 | `-h`, `--help` | Show help. |
 
+### `version`
+
+```sh
+git vault version
+```
+
+Print the version hardcoded in the script, such as `0.1.0`. No repository or age
+installation is required.
+
+| Option | Purpose |
+| --- | --- |
+| `-h`, `--help` | Show help. |
+
 ### Exit codes
 
 `0` success, `1` operation failure, `2` invalid arguments, `3` ref update or creation
