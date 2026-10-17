@@ -212,8 +212,7 @@ class VaultError(Exception):
 
 
 def run(command, data=None, cwd=None, check=True, private=False):
-    result = subprocess.run(command, input=data, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE, cwd=cwd, check=False)
+    result = subprocess.run(command, input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, check=False)
     if check and result.returncode:
         # age diagnostics can include malformed identity contents. Never echo them.
         detail = "" if private else result.stderr.decode("utf-8", "replace").strip()
@@ -233,16 +232,19 @@ def valid_path(name):
     except UnicodeError:
         raise VaultError("Paths must be valid UTF-8.") from None
     parts = name.split("/")
-    if (not name or any(p in ("", ".", "..") or p.lower() == ".git" for p in parts)
-            or "\\" in name or any(ord(c) < 32 or ord(c) == 127 for c in name)):
+    if (
+        not name
+        or any(p in ("", ".", "..") or p.lower() == ".git" for p in parts)
+        or "\\" in name
+        or any(ord(c) < 32 or ord(c) == 127 for c in name)
+    ):
         raise VaultError(f"Unsupported file path: {name!r}")
     return name
 
 
 def recipient_list(keys):
     keys = sorted(set(keys))
-    if not keys or any(not re.fullmatch(r"age1[023456789acdefghjklmnpqrstuvwxyz]{58}", k)
-                       for k in keys):
+    if not keys or any(not re.fullmatch(r"age1[023456789acdefghjklmnpqrstuvwxyz]{58}", k) for k in keys):
         raise VaultError("At least one valid native age recipient (age1...) is required.")
     return keys
 
@@ -321,8 +323,11 @@ class Repository:
         return self.git("hash-object", "-w", "--stdin", data=content).stdout.decode().strip()
 
     def branch_ref(self, name):
-        if (name.startswith("-") or "@{" in name
-                or self.git("check-ref-format", "--branch", name, check=False).returncode):
+        if (
+            name.startswith("-")
+            or "@{" in name
+            or self.git("check-ref-format", "--branch", name, check=False).returncode
+        ):
             raise VaultError(f"Invalid branch name: {name}", 2)
         ref = "refs/heads/" + name
         if self.git("symbolic-ref", "-q", ref, check=False).returncode == 0:
@@ -336,8 +341,7 @@ class Repository:
         return result.stdout.decode().strip()
 
     def commit_oid(self, revision):
-        result = self.git("rev-parse", "--verify", "--end-of-options",
-                          revision + "^{commit}", check=False)
+        result = self.git("rev-parse", "--verify", "--end-of-options", revision + "^{commit}", check=False)
         if result.returncode:
             raise VaultError(f"Cannot resolve commit: {revision}")
         return result.stdout.decode().strip()
@@ -400,8 +404,7 @@ class Repository:
         flat = {}
         for name, profile in profiles.items():
             base = f"{name}/"
-            flat[base + "recipients"] = self.hash_blob(
-                ("\n".join(profile.recipients) + "\n").encode())
+            flat[base + "recipients"] = self.hash_blob(("\n".join(profile.recipients) + "\n").encode())
             for path, oid in profile.files.items():
                 flat[base + "files/" + path] = oid
         nested = {}
@@ -442,8 +445,7 @@ class Repository:
         oid = self.git(*command, data=message.encode("utf-8")).stdout.decode().strip()
         self.ensure_not_checked_out(ref)
         expected = old_oid or "0" * len(oid)
-        result = self.git("update-ref", "--no-deref", "-m", "git-vault", ref,
-                          oid, expected, check=False)
+        result = self.git("update-ref", "--no-deref", "-m", "git-vault", ref, oid, expected, check=False)
         if result.returncode:
             raise VaultError("Cannot update branch: it changed concurrently or its ref name conflicts.", 3)
         print(f"{ref.removeprefix('refs/heads/')} {oid[:12]}")
@@ -637,8 +639,10 @@ def execute(args):
         message = message_for(args)
         if profile.files:
             with identities(args.identity) as identity_paths:
-                files = {name: repo.hash_blob(encrypt(decrypt(repo.blob(oid), identity_paths), keys))
-                         for name, oid in profile.files.items()}
+                files = {}
+                for name, oid in profile.files.items():
+                    plaintext = decrypt(repo.blob(oid), identity_paths)
+                    files[name] = repo.hash_blob(encrypt(plaintext, keys))
             profile.files = files
         profile.recipients = keys
         repo.commit(ref, old_oid, parent, profiles, message)
@@ -688,90 +692,107 @@ Examples:
 Exit codes: 0 success; 1 operation failed; 2 invalid arguments; 3 ref conflict.
 Plaintext exclusion is your responsibility; ignore settings are never modified.
 """
-    parser = argparse.ArgumentParser(prog="git vault", description=__doc__,
-                                     epilog=epilog,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter,
-                                     allow_abbrev=False)
+    parser = argparse.ArgumentParser(
+        prog="git vault", description=__doc__, epilog=epilog,
+        formatter_class=argparse.RawDescriptionHelpFormatter, allow_abbrev=False,
+    )
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("version", help="Show the version.",
-                        description="Print the hardcoded version and exit.",
-                        allow_abbrev=False)
+    commands.add_parser("version", help="Show the version.", description="Print the hardcoded version and exit.", allow_abbrev=False)
     skill = commands.add_parser(
         "skill", help="Print or install the git-vault agent skill.",
         description="Print SKILL.md to stdout, or write it to a file without requiring Git or age.",
-        epilog="Examples:\n  git vault skill\n  git vault skill -o\n"
-               "  git vault skill -o .claude/skills/git-vault/SKILL.md\n"
-               "Relative output paths are resolved from the current directory; parent directories are created.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        allow_abbrev=False)
-    skill.add_argument("-o", "--output", nargs="?", const=DEFAULT_SKILL_PATH, metavar="PATH",
-                       help=f"Write SKILL.md to a file (default when PATH is omitted: {DEFAULT_SKILL_PATH}).")
-    skill.add_argument("-f", "--force", action="store_true",
-                       help="Overwrite an existing output file; requires -o.")
+        epilog=(
+            "Examples:\n  git vault skill\n  git vault skill -o\n"
+            "  git vault skill -o .claude/skills/git-vault/SKILL.md\n"
+            "Relative output paths are resolved from the current directory; parent directories are created."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter, allow_abbrev=False,
+    )
+    skill.add_argument(
+        "-o", "--output", nargs="?", const=DEFAULT_SKILL_PATH, metavar="PATH",
+        help=f"Write SKILL.md to a file (default when PATH is omitted: {DEFAULT_SKILL_PATH}).",
+    )
+    skill.add_argument("-f", "--force", action="store_true", help="Overwrite an existing output file; requires -o.")
 
-    def leaf(group, name, operation, description, profile=False, update=False,
-             create=False, identity=False, recipient=False):
-        p = group.add_parser(name, description=description, help=description,
-                             epilog=epilog, formatter_class=argparse.RawDescriptionHelpFormatter,
-                             allow_abbrev=False)
+    def leaf(
+        group, name, operation, description, profile=False, update=False,
+        create=False, identity=False, recipient=False,
+    ):
+        p = group.add_parser(
+            name, description=description, help=description, epilog=epilog,
+            formatter_class=argparse.RawDescriptionHelpFormatter, allow_abbrev=False,
+        )
         p.set_defaults(operation=operation)
         p.add_argument("-b", "--branch", metavar="NAME", help="Select a local branch (default: vault).")
         p.add_argument("-C", "--no-color", action="store_true", help="Disable ANSI colors.")
         if profile:
-            p.add_argument("-p", "--profile", default="default", metavar="NAME",
-                           help="Select a profile (default: default).")
+            p.add_argument("-p", "--profile", default="default", metavar="NAME", help="Select a profile (default: default).")
         if update:
             messages = p.add_mutually_exclusive_group()
-            messages.add_argument("-m", "--message", action="append", metavar="TEXT",
-                                  help="Set the commit message; repeat for paragraphs. Do not include secrets.")
-            messages.add_argument("-F", "--message-file", metavar="PATH",
-                                  help="Read a UTF-8 commit message from a file (not stdin).")
+            messages.add_argument(
+                "-m", "--message", action="append", metavar="TEXT",
+                help="Set the commit message; repeat for paragraphs. Do not include secrets.",
+            )
+            messages.add_argument("-F", "--message-file", metavar="PATH", help="Read a UTF-8 commit message from a file (not stdin).")
         if create:
-            p.add_argument("-n", "--new-branch", action="store_true",
-                           help="Create the explicitly named -b branch; fail if it exists.")
-            p.add_argument("-B", "--base", metavar="REF",
-                           help="Set the creation base (default: vault); requires -n.")
+            p.add_argument("-n", "--new-branch", action="store_true", help="Create the explicitly named -b branch; fail if it exists.")
+            p.add_argument("-B", "--base", metavar="REF", help="Set the creation base (default: vault); requires -n.")
         if identity:
-            p.add_argument("-i", "--identity", action="append", metavar="PATH",
-                           help="Use an identity file; repeat for multiple files. Otherwise read stdin or prompt without echo.")
+            p.add_argument(
+                "-i", "--identity", action="append", metavar="PATH",
+                help="Use an identity file; repeat for multiple files. Otherwise read stdin or prompt without echo.",
+            )
         if recipient:
-            p.add_argument("-r", "--recipient", action="append", required=True, metavar="KEY",
-                           help="Add a native age public key; repeat for multiple recipients.")
+            p.add_argument(
+                "-r", "--recipient", action="append", required=True, metavar="KEY",
+                help="Add a native age public key; repeat for multiple recipients.",
+            )
         return p
 
-    leaf(commands, "init", "init", "Initialize an independent vault branch.",
-         update=True, recipient=True)
+    leaf(commands, "init", "init", "Initialize an independent vault branch.", update=True, recipient=True)
     for name in ("profiles", "recipients"):
         group_parser = commands.add_parser(name, help=f"Manage {name}.")
         group = group_parser.add_subparsers(dest="action", required=True)
         leaf(group, "list", name + "-list", f"List {name}.", profile=name == "recipients")
         for action in ("add", "remove"):
-            p = leaf(group, action, name + "-" + action, f"{action.capitalize()} {name}.",
-                     profile=name == "recipients", update=True, create=True,
-                     identity=name == "recipients", recipient=name == "profiles" and action == "add")
+            p = leaf(
+                group, action, name + "-" + action, f"{action.capitalize()} {name}.",
+                profile=name == "recipients", update=True, create=True,
+                identity=name == "recipients", recipient=name == "profiles" and action == "add",
+            )
             if name == "profiles":
                 p.add_argument("name", metavar="NAME", help="Name the profile.")
             else:
                 p.add_argument("keys", nargs="+", metavar="KEY", help="Specify native age public keys.")
     leaf(commands, "list", "list", "List saved paths in a profile.", profile=True)
     for operation in ("save", "restore", "remove"):
-        p = leaf(commands, operation, operation,
-                 {"save": "Encrypt files and commit them without changing your checkout.",
-                  "restore": "Decrypt files into the working tree.",
-                  "remove": "Remove saved files from the current snapshot; keep plaintext and history."}[operation],
-                 profile=True, update=operation != "restore", create=operation != "restore",
-                 identity=operation == "restore")
+        p = leaf(
+            commands, operation, operation,
+            {
+                "save": "Encrypt files and commit them without changing your checkout.",
+                "restore": "Decrypt files into the working tree.",
+                "remove": "Remove saved files from the current snapshot; keep plaintext and history.",
+            }[operation],
+            profile=True, update=operation != "restore", create=operation != "restore", identity=operation == "restore",
+        )
         if operation in ("save", "restore"):
             p.add_argument("-a", "--all", action="store_true", help="Use all saved paths in this profile; excludes explicit paths.")
-            p.add_argument("-f", "--force", action="store_true",
-                           help=("Allow tracked input files. Existing plaintext and Git history are not removed."
-                                 if operation == "save" else
-                                 "Overwrite existing or tracked files, including uncommitted changes. The index is unchanged."))
+            p.add_argument(
+                "-f", "--force", action="store_true",
+                help=(
+                    "Allow tracked input files. Existing plaintext and Git history are not removed."
+                    if operation == "save" else
+                    "Overwrite existing or tracked files, including uncommitted changes. The index is unchanged."
+                ),
+            )
         else:
             p.set_defaults(all=False)
         if operation == "restore":
             p.add_argument("-R", "--revision", metavar="REV", help="Restore from a reachable historical commit (default: branch tip).")
-        p.add_argument("paths", nargs="*", metavar="PATH", help="Use paths relative to the current directory; use -- before leading hyphens.")
+        p.add_argument(
+            "paths", nargs="*", metavar="PATH",
+            help="Use paths relative to the current directory; use -- before leading hyphens.",
+        )
     return parser
 
 
@@ -796,8 +817,7 @@ def main():
     if getattr(args, "base", None) is not None and not args.new_branch:
         parser.error("--base requires --new-branch")
     if hasattr(args, "paths") and bool(args.paths) == bool(args.all):
-        parser.error("specify file paths" if args.operation == "remove"
-                     else "specify file paths or --all, exclusively")
+        parser.error("specify file paths" if args.operation == "remove" else "specify file paths or --all, exclusively")
     try:
         if args.command == "skill":
             output_skill(args)
