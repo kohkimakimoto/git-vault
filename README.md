@@ -17,6 +17,19 @@ are required.
 
 ## Installation
 
+### Homebrew
+
+```sh
+brew install kohkimakimoto/tap/git-vault
+git vault version
+```
+
+The [Homebrew formula](https://github.com/kohkimakimoto/homebrew-tap/blob/main/Formula/git-vault.rb)
+installs age automatically. Python 3.11 or later and Git must be available on your
+PATH.
+
+### Manual installation
+
 Copy `bin/git-vault` to a directory on your PATH:
 
 ```sh
