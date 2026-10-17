@@ -463,11 +463,36 @@ Remove the specified paths from the current saved snapshot in one commit. Keep w
 git vault version
 ```
 
-Print the version hardcoded in the script, such as `0.1.0`. No repository or age
+Print the version hardcoded in the script, such as `0.2.0`. No repository or age
 installation is required.
 
 | Option | Purpose |
 | --- | --- |
+| `-h`, `--help` | Show help. |
+
+### `skill`
+
+```sh
+git vault skill
+git vault skill -o
+git vault skill -o .claude/skills/git-vault/SKILL.md
+```
+
+Print a self-contained agent skill as SKILL.md content to stdout. The skill explains
+how an AI agent should use git-vault's sections, recipients, restore operations,
+and working branches. No repository or age installation is required to generate it.
+
+Use `-o` without a path to install it at `.agents/skills/git-vault/SKILL.md`, or
+provide a full file path to use another location, such as `.claude/skills/git-vault/SKILL.md`.
+Relative paths start from the current directory. Missing parent directories are
+created. File mode writes the skill to the file and a confirmation to stderr,
+leaving stdout empty. Existing files are preserved unless `-f` is specified;
+symlink output files are rejected even with `-f`.
+
+| Option | Purpose |
+| --- | --- |
+| `-o`, `--output [PATH]` | Write the skill to a file; an omitted path defaults to `.agents/skills/git-vault/SKILL.md`. Without this option, print to stdout. |
+| `-f`, `--force` | Overwrite an existing output file; requires `-o`. |
 | `-h`, `--help` | Show help. |
 
 ### Exit codes
@@ -518,7 +543,8 @@ bash tests/cases/03-recipients.sh
 scenario creates disposable keys and repositories, isolates personal Git
 configuration, and cleans up afterward. Tests cover round trips, sections,
 recipient rotation, working branches, messages, force handling, paths, historical
-restore, linked worktrees, remote divergence, and failure atomicity.
+restore, linked worktrees, remote divergence, failure atomicity, and agent skill
+output and installation.
 
 There is no test framework or Python package dependency. Bash, Git, age, age-keygen,
 and Python (for git-vault itself) are required. A small Python helper drives the
