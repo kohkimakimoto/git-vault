@@ -1,0 +1,609 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""Store age-encrypted files in a separate Git branch, without Python packages."""
+
+import argparse
+from contextlib import contextmanager
+from dataclasses import dataclass
+import getpass
+import os
+from pathlib import Path
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+
+
+class VaultError(Exception):
+    def __init__(self, message, code=1):
+        super().__init__(message)
+        self.code = code
+
+
+def run(command, data=None, cwd=None, check=True, private=False):
+    result = subprocess.run(command, input=data, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, cwd=cwd, check=False)
+    if check and result.returncode:
+        # age diagnostics can include malformed identity contents. Never echo them.
+        detail = "" if private else result.stderr.decode("utf-8", "replace").strip()
+        raise VaultError(detail or f"{command[0]} failed (exit {result.returncode}).")
+    return result
+
+
+def valid_section(name):
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name):
+        raise VaultError(f"Invalid section name: {name}", 2)
+    return name
+
+
+def valid_path(name):
+    try:
+        name.encode("utf-8")
+    except UnicodeError:
+        raise VaultError("Paths must be valid UTF-8.") from None
+    parts = name.split("/")
+    if (not name or any(p in ("", ".", "..") or p.lower() == ".git" for p in parts)
+            or "\\" in name or any(ord(c) < 32 or ord(c) == 127 for c in name)):
+        raise VaultError(f"Unsupported file path: {name!r}")
+    return name
+
+
+def recipient_list(keys):
+    keys = sorted(set(keys))
+    if not keys or any(not re.fullmatch(r"age1[023456789acdefghjklmnpqrstuvwxyz]{58}", k)
+                       for k in keys):
+        raise VaultError("At least one valid native age recipient (age1...) is required.")
+    return keys
+
+
+def encrypt(data, keys):
+    command = ["age", "--encrypt"]
+    for key in keys:
+        command.extend(["-r", key])
+    return run(command, data, private=True).stdout
+
+
+def validate_recipients(keys):
+    keys = recipient_list(keys)
+    encrypt(b"", keys)  # Let age validate the Bech32 checksum as well.
+    return keys
+
+
+@contextmanager
+def identities(paths):
+    if paths:
+        resolved = []
+        for path in paths:
+            file = Path(path).absolute()
+            if not file.is_file():
+                raise VaultError(f"Identity file not found: {path}")
+            resolved.append(str(file))
+        yield resolved
+        return
+    if sys.stdin.isatty():
+        content = getpass.getpass("Input private key content: ").encode("utf-8")
+    else:
+        content = sys.stdin.buffer.read()
+    if not content.strip():
+        raise VaultError("No private key supplied. Use -i, stdin, or interactive input.")
+    with tempfile.TemporaryDirectory(prefix="git-vault-key-") as directory:
+        os.chmod(directory, 0o700)
+        path = Path(directory) / "identity"
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(content)
+        yield [str(path)]
+
+
+def decrypt(data, paths):
+    command = ["age", "--decrypt"]
+    for path in paths:
+        command.extend(["-i", path])
+    return run(command, data, private=True).stdout
+
+
+@dataclass
+class Section:
+    recipients: list
+    files: dict
+
+
+class Repository:
+    def __init__(self):
+        self.cwd = Path.cwd().resolve()
+        root = run(["git", "rev-parse", "--show-toplevel"], check=False)
+        if root.returncode:
+            raise VaultError("Run git-vault inside a Git working tree.")
+        self.root = Path(os.fsdecode(root.stdout.rstrip(b"\n"))).resolve()
+        self.git_dirs = []
+        for flag in ("--absolute-git-dir", "--git-common-dir"):
+            value = self.git("rev-parse", flag).stdout.rstrip(b"\n")
+            self.git_dirs.append((self.root / os.fsdecode(value)).resolve())
+
+    def git(self, *args, data=None, check=True):
+        return run(["git", *args], data=data, cwd=self.root, check=check)
+
+    def blob(self, oid):
+        return self.git("cat-file", "blob", oid).stdout
+
+    def hash_blob(self, content):
+        return self.git("hash-object", "-w", "--stdin", data=content).stdout.decode().strip()
+
+    def branch_ref(self, name):
+        if (name.startswith("-") or "@{" in name
+                or self.git("check-ref-format", "--branch", name, check=False).returncode):
+            raise VaultError(f"Invalid branch name: {name}", 2)
+        ref = "refs/heads/" + name
+        if self.git("symbolic-ref", "-q", ref, check=False).returncode == 0:
+            raise VaultError(f"Symbolic branch refs are not supported: {name}")
+        return ref
+
+    def branch_oid(self, ref):
+        result = self.git("show-ref", "--verify", "--hash", ref, check=False)
+        if result.returncode:
+            return None
+        return result.stdout.decode().strip()
+
+    def commit_oid(self, revision):
+        result = self.git("rev-parse", "--verify", "--end-of-options",
+                          revision + "^{commit}", check=False)
+        if result.returncode:
+            raise VaultError(f"Cannot resolve commit: {revision}")
+        return result.stdout.decode().strip()
+
+    def ensure_not_checked_out(self, ref):
+        worktrees = self.git("worktree", "list", "--porcelain").stdout.splitlines()
+        if ("branch " + ref).encode() in worktrees:
+            raise VaultError(f"Target branch is checked out in a worktree: {ref}")
+
+    def load(self, oid):
+        sections = {}
+        directories = set()
+        entries = self.git("ls-tree", "-r", "-t", "-z", oid).stdout.split(b"\0")
+        for entry in filter(None, entries):
+            meta, raw_name = entry.split(b"\t", 1)
+            try:
+                name = raw_name.decode("utf-8")
+            except UnicodeError:
+                raise VaultError("Vault tree contains a non-UTF-8 path.") from None
+            valid_path(name)
+            mode, kind, object_id = meta.decode("ascii").split()
+            if mode == "040000" and kind == "tree":
+                directories.add(name)
+                continue
+            if mode != "100644" or kind != "blob":
+                raise VaultError(f"Unsupported vault tree entry: {name}")
+            parts = name.split("/")
+            if len(parts) < 3 or parts[0] != "sections":
+                raise VaultError(f"Not a vault tree: unexpected entry {name}")
+            section_name = valid_section(parts[1])
+            section = sections.setdefault(section_name, Section([], {}))
+            if len(parts) == 3 and parts[2] == "recipients":
+                try:
+                    text = self.blob(object_id).decode("utf-8")
+                except UnicodeError:
+                    raise VaultError("Recipients must be UTF-8.") from None
+                keys = text.splitlines()
+                if not text.endswith("\n") or keys != sorted(set(keys)):
+                    raise VaultError(f"Invalid recipients file in section {section_name}")
+                section.recipients = recipient_list(keys)
+            elif len(parts) >= 4 and parts[2] == "files":
+                section.files[valid_path("/".join(parts[3:]))] = object_id
+            else:
+                raise VaultError(f"Unexpected vault entry: {name}")
+        if "default" not in sections or any(not s.recipients for s in sections.values()):
+            raise VaultError("Not a vault tree: default section and recipients are required.")
+        allowed = {"sections"}
+        for name, section in sections.items():
+            base = f"sections/{name}"
+            allowed.update((base, base + "/files"))
+            for path in section.files:
+                pieces = path.split("/")
+                for length in range(1, len(pieces)):
+                    allowed.add(base + "/files/" + "/".join(pieces[:length]))
+        if directories - allowed:
+            raise VaultError("Vault tree contains unexpected directories.")
+        return sections
+
+    def tree(self, sections):
+        flat = {}
+        for name, section in sections.items():
+            base = f"sections/{name}/"
+            flat[base + "recipients"] = self.hash_blob(
+                ("\n".join(section.recipients) + "\n").encode())
+            for path, oid in section.files.items():
+                flat[base + "files/" + path] = oid
+        nested = {}
+        for path, oid in flat.items():
+            node = nested
+            parts = path.split("/")
+            for part in parts[:-1]:
+                child = node.setdefault(part, {})
+                if not isinstance(child, dict):
+                    raise VaultError(f"File/directory conflict in vault: {path}")
+                node = child
+            if isinstance(node.get(parts[-1]), dict):
+                raise VaultError(f"File/directory conflict in vault: {path}")
+            node[parts[-1]] = oid
+
+        def write(node):
+            entries = []
+            for name, item in node.items():
+                if isinstance(item, dict):
+                    meta = f"040000 tree {write(item)}"
+                else:
+                    meta = f"100644 blob {item}"
+                entries.append(meta.encode() + b"\t" + name.encode() + b"\0")
+            return self.git("mktree", "-z", data=b"".join(entries)).stdout.decode().strip()
+        return write(nested)
+
+    def commit(self, ref, old_oid, parent, sections, message):
+        self.ensure_not_checked_out(ref)
+        tree = self.tree(sections)
+        if parent:
+            old_tree = self.git("rev-parse", parent + "^{tree}").stdout.decode().strip()
+            if tree == old_tree:
+                print("No changes.")
+                return
+        command = ["commit-tree", tree]
+        if parent:
+            command += ["-p", parent]
+        oid = self.git(*command, data=message.encode("utf-8")).stdout.decode().strip()
+        self.ensure_not_checked_out(ref)
+        expected = old_oid or "0" * len(oid)
+        result = self.git("update-ref", "--no-deref", "-m", "git-vault", ref,
+                          oid, expected, check=False)
+        if result.returncode:
+            raise VaultError("Cannot update branch: it changed concurrently or its ref name conflicts.", 3)
+        print(f"{ref.removeprefix('refs/heads/')} {oid[:12]}")
+
+    def relative_path(self, value):
+        path = Path(value)
+        if ".." in path.parts:
+            raise VaultError(f"Parent traversal is not supported: {value}")
+        absolute = path if path.is_absolute() else self.cwd / path
+        try:
+            name = absolute.relative_to(self.root).as_posix()
+        except ValueError:
+            raise VaultError(f"Path is outside the repository: {value}") from None
+        return valid_path(name)
+
+    def local_path(self, name):
+        valid_path(name)
+        path = self.root / name
+        current = self.root
+        for part in Path(name).parts:
+            current = current / part
+            if current.is_symlink():
+                raise VaultError(f"Symlinks are not supported: {name}")
+            if current.exists() and current != path and not current.is_dir():
+                raise VaultError(f"Parent is not a directory: {name}")
+        for directory in self.git_dirs:
+            if path == directory or directory in path.parents:
+                raise VaultError(f"Git administration paths are not supported: {name}")
+        if path.exists() and not path.is_file():
+            raise VaultError(f"Not a regular file: {name}")
+        return path
+
+    def tracked(self):
+        return set(filter(None, self.git("ls-files", "-z").stdout.split(b"\0")))
+
+
+def message_for(args, paths=()):
+    if args.message is not None:
+        message = "\n\n".join(args.message)
+    elif args.message_file is not None:
+        if args.message_file == "-" or not Path(args.message_file).is_file():
+            raise VaultError("--message-file requires a regular UTF-8 file, not stdin.", 2)
+        message = Path(args.message_file).read_text(encoding="utf-8")
+    else:
+        operation = args.operation
+        if operation == "init":
+            title = "Initialize vault"
+        elif operation.startswith("sections-"):
+            title = f"{operation.split('-')[1].capitalize()} section {args.name}"
+        elif operation.startswith("recipients-"):
+            title = f"{operation.split('-')[1].capitalize()} recipients in section {args.section}"
+        else:
+            title = f"{operation.capitalize()} files in section {args.section}"
+        message = "git-vault: " + title
+        if paths:
+            message += "\n\n" + "\n".join(paths)
+    if not message.strip() or "\0" in message:
+        raise VaultError("Commit messages must be nonempty and contain no NUL bytes.", 2)
+    return message
+
+
+def targets(repo, args, section):
+    if args.all:
+        return sorted(section.files)
+    names = [repo.relative_path(path) for path in args.paths]
+    return sorted(set(names))
+
+
+def restore(repo, args, section, names):
+    tracked = repo.tracked()
+    destinations = []
+    for name in names:
+        if name not in section.files:
+            raise VaultError(f"File is not saved in this section: {name}")
+        path = repo.local_path(name)
+        if not args.force and (path.exists() or name.encode() in tracked):
+            raise VaultError(f"Refusing to overwrite existing or tracked file: {name}. Use -f.")
+        destinations.append(path)
+    if not names:
+        print("No files.")
+        return
+    with identities(args.identity) as keys:
+        contents = [decrypt(repo.blob(section.files[name]), keys) for name in names]
+    # Reject duplicate normalized destinations before writing any plaintext.
+    aliases = [os.path.normcase(str(path.resolve())) for path in destinations]
+    if len(set(aliases)) != len(aliases):
+        raise VaultError("Multiple saved files resolve to the same destination.")
+    pending = []
+    placed = []
+    try:
+        for path, data in zip(destinations, contents):
+            missing = []
+            parent = path.parent
+            while not parent.exists():
+                missing.append(parent)
+                parent = parent.parent
+            for directory in reversed(missing):
+                directory.mkdir(mode=0o700)
+            fd, temporary = tempfile.mkstemp(prefix=".git-vault-", dir=path.parent)
+            pending.append(Path(temporary))
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(data)
+        for name, path, temporary in zip(names, destinations, pending):
+            repo.local_path(name)
+            if args.force:
+                os.replace(temporary, path)
+            else:
+                # link is an atomic no-clobber installation, unlike replace.
+                os.link(temporary, path)
+                temporary.unlink()
+            placed.append(name)
+            print(f"Restored: {name}")
+    except OSError:
+        if placed:
+            print("Files already restored: " + ", ".join(placed), file=sys.stderr)
+        raise
+    finally:
+        for temporary in pending:
+            temporary.unlink(missing_ok=True)
+
+
+def execute(args):
+    for command in ("git", "age"):
+        if shutil.which(command) is None:
+            raise VaultError(f"Required command not found: {command}")
+    repo = Repository()
+    branch = args.branch or "vault"
+    ref = repo.branch_ref(branch)
+    old_oid = repo.branch_oid(ref)
+    update = args.operation not in ("list", "restore", "sections-list", "recipients-list")
+    if update:
+        repo.ensure_not_checked_out(ref)
+    if args.operation == "init":
+        if old_oid:
+            raise VaultError(f"Branch already exists: {branch}")
+        message = message_for(args)
+        sections = {"default": Section(validate_recipients(args.recipient), {})}
+        repo.commit(ref, None, None, sections, message)
+        return
+    new = getattr(args, "new_branch", False)
+    if new:
+        if old_oid:
+            raise VaultError(f"Branch already exists: {branch}")
+        parent = repo.commit_oid(args.base or "vault")
+    else:
+        if not old_oid:
+            raise VaultError(f"Branch does not exist: {branch}. Use init or --new-branch.")
+        parent = repo.commit_oid(ref)
+    source = parent
+    if args.operation == "restore" and args.revision:
+        source = repo.commit_oid(args.revision)
+        if repo.git("merge-base", "--is-ancestor", source, parent, check=False).returncode:
+            raise VaultError("Revision is not reachable from the selected branch.")
+    sections = repo.load(source)
+    if args.operation.startswith("sections-"):
+        action = args.operation.split("-")[1]
+        if action == "list":
+            print("\n".join(sorted(sections)))
+            return
+        name = valid_section(args.name)
+        if action == "add":
+            if name in sections:
+                raise VaultError(f"Section already exists: {name}")
+            sections[name] = Section(validate_recipients(args.recipient), {})
+        else:
+            if name not in sections:
+                raise VaultError(f"Section does not exist: {name}")
+            if name == "default" or sections[name].files:
+                raise VaultError("Only empty, non-default sections can be removed.")
+            del sections[name]
+        repo.commit(ref, old_oid, parent, sections, message_for(args))
+        return
+    valid_section(args.section)
+    if args.section not in sections:
+        raise VaultError(f"Section does not exist: {args.section}")
+    section = sections[args.section]
+    if args.operation == "recipients-list":
+        print("\n".join(section.recipients))
+        return
+    if args.operation.startswith("recipients-"):
+        supplied = recipient_list(args.keys)
+        existing = set(section.recipients)
+        if args.operation == "recipients-add":
+            if existing.intersection(supplied):
+                raise VaultError("A recipient is already present.")
+            keys = validate_recipients(existing.union(supplied))
+        else:
+            if not set(supplied).issubset(existing):
+                raise VaultError("A recipient is not present.")
+            keys = validate_recipients(existing.difference(supplied))
+        message = message_for(args)
+        if section.files:
+            with identities(args.identity) as identity_paths:
+                files = {name: repo.hash_blob(encrypt(decrypt(repo.blob(oid), identity_paths), keys))
+                         for name, oid in section.files.items()}
+            section.files = files
+        section.recipients = keys
+        repo.commit(ref, old_oid, parent, sections, message)
+        return
+    if args.operation == "list":
+        if section.files:
+            print("\n".join(sorted(section.files)))
+        return
+    names = targets(repo, args, section)
+    if args.operation == "restore":
+        restore(repo, args, section, names)
+        return
+    message = message_for(args, names)
+    if args.operation == "remove":
+        for name in names:
+            if name not in section.files:
+                raise VaultError(f"File is not saved in this section: {name}")
+        for name in names:
+            del section.files[name]
+    else:
+        tracked = repo.tracked()
+        paths = []
+        for name in names:
+            path = repo.local_path(name)
+            if not path.is_file():
+                raise VaultError(f"File not found: {name}")
+            if name.encode() in tracked and not args.force:
+                raise VaultError(f"Refusing to save tracked file: {name}. Use -f.")
+            paths.append(path)
+        for name, path in zip(names, paths):
+            section.files[name] = repo.hash_blob(encrypt(path.read_bytes(), section.recipients))
+    if not names:
+        print("No files.")
+        return
+    repo.commit(ref, old_oid, parent, sections, message)
+
+
+def parser_for_cli():
+    epilog = """Requires Python 3.11+, git, and age. No Python packages are needed.
+
+Examples:
+  git vault init -r age1...
+  git vault save -s production -m 'Rotate credentials' -- .env
+  git vault restore -a < /path/to/identity
+  git vault save -b vault-update -n -B origin/vault -- .env
+
+Exit codes: 0 success; 1 operation failed; 2 invalid arguments; 3 ref conflict.
+Plaintext exclusion is your responsibility; ignore settings are never modified.
+"""
+    parser = argparse.ArgumentParser(prog="git vault", description=__doc__,
+                                     epilog=epilog,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter,
+                                     allow_abbrev=False)
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    def leaf(group, name, operation, description, section=False, update=False,
+             create=False, identity=False, recipient=False):
+        p = group.add_parser(name, description=description, help=description,
+                             epilog=epilog, formatter_class=argparse.RawDescriptionHelpFormatter,
+                             allow_abbrev=False)
+        p.set_defaults(operation=operation)
+        p.add_argument("-b", "--branch", metavar="NAME", help="Select a local branch (default: vault).")
+        p.add_argument("-C", "--no-color", action="store_true", help="Disable ANSI colors.")
+        if section:
+            p.add_argument("-s", "--section", default="default", metavar="NAME",
+                           help="Select a section (default: default).")
+        if update:
+            messages = p.add_mutually_exclusive_group()
+            messages.add_argument("-m", "--message", action="append", metavar="TEXT",
+                                  help="Set the commit message; repeat for paragraphs. Do not include secrets.")
+            messages.add_argument("-F", "--message-file", metavar="PATH",
+                                  help="Read a UTF-8 commit message from a file (not stdin).")
+        if create:
+            p.add_argument("-n", "--new-branch", action="store_true",
+                           help="Create the explicitly named -b branch; fail if it exists.")
+            p.add_argument("-B", "--base", metavar="REF",
+                           help="Set the creation base (default: vault); requires -n.")
+        if identity:
+            p.add_argument("-i", "--identity", action="append", metavar="PATH",
+                           help="Use an identity file; repeat for multiple files. Otherwise read stdin or prompt without echo.")
+        if recipient:
+            p.add_argument("-r", "--recipient", action="append", required=True, metavar="KEY",
+                           help="Add a native age public key; repeat for multiple recipients.")
+        return p
+
+    leaf(commands, "init", "init", "Initialize an independent vault branch.",
+         update=True, recipient=True)
+    for name in ("sections", "recipients"):
+        group_parser = commands.add_parser(name, help=f"Manage {name}.")
+        group = group_parser.add_subparsers(dest="action", required=True)
+        leaf(group, "list", name + "-list", f"List {name}.", section=name == "recipients")
+        for action in ("add", "remove"):
+            p = leaf(group, action, name + "-" + action, f"{action.capitalize()} {name}.",
+                     section=name == "recipients", update=True, create=True,
+                     identity=name == "recipients", recipient=name == "sections" and action == "add")
+            if name == "sections":
+                p.add_argument("name", metavar="NAME", help="Name the section.")
+            else:
+                p.add_argument("keys", nargs="+", metavar="KEY", help="Specify native age public keys.")
+    leaf(commands, "list", "list", "List saved paths in a section.", section=True)
+    for operation in ("save", "restore", "remove"):
+        p = leaf(commands, operation, operation,
+                 {"save": "Encrypt files and commit them without changing your checkout.",
+                  "restore": "Decrypt files into the working tree.",
+                  "remove": "Remove saved files from the current snapshot; keep plaintext and history."}[operation],
+                 section=True, update=operation != "restore", create=operation != "restore",
+                 identity=operation == "restore")
+        if operation in ("save", "restore"):
+            p.add_argument("-a", "--all", action="store_true", help="Use all saved paths in this section; excludes explicit paths.")
+            p.add_argument("-f", "--force", action="store_true",
+                           help=("Allow tracked input files. Existing plaintext and Git history are not removed."
+                                 if operation == "save" else
+                                 "Overwrite existing or tracked files, including uncommitted changes. The index is unchanged."))
+        else:
+            p.set_defaults(all=False)
+        if operation == "restore":
+            p.add_argument("-R", "--revision", metavar="REV", help="Restore from a reachable historical commit (default: branch tip).")
+        p.add_argument("paths", nargs="*", metavar="PATH", help="Use paths relative to the current directory; use -- before leading hyphens.")
+    return parser
+
+
+def main():
+    if sys.version_info < (3, 11):
+        print("git-vault: Python 3.11 or later is required.", file=sys.stderr)
+        return 1
+    def interrupt(signum, frame):
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, interrupt)
+    parser = parser_for_cli()
+    if len(sys.argv) == 1:
+        parser.print_help()
+        return 0
+    args = parser.parse_args()
+    if getattr(args, "new_branch", False) and args.branch is None:
+        parser.error("--new-branch requires an explicit --branch")
+    if getattr(args, "base", None) is not None and not args.new_branch:
+        parser.error("--base requires --new-branch")
+    if hasattr(args, "paths") and bool(args.paths) == bool(args.all):
+        parser.error("specify file paths" if args.operation == "remove"
+                     else "specify file paths or --all, exclusively")
+    try:
+        execute(args)
+    except VaultError as error:
+        print(f"git-vault: {error}", file=sys.stderr)
+        return error.code
+    except (OSError, UnicodeError) as error:
+        print(f"git-vault: {error}", file=sys.stderr)
+        return 1
+    except (KeyboardInterrupt, EOFError):
+        print("git-vault: Interrupted.", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Inject one competing update immediately before the CLI's compare-and-swap.
+set -eu -o pipefail
+if [[ "$1" == update-ref ]]; then
+    "$REAL_GIT" update-ref "$RACE_REF" "$RACE_OID"
+fi
+exec "$REAL_GIT" "$@"
