@@ -39,22 +39,9 @@ brew install kohkimakimoto/tap/git-vault
 git vault version
 ```
 
-The [Homebrew formula](https://github.com/kohkimakimoto/homebrew-tap/blob/main/Formula/git-vault.rb)
-installs age automatically. Python 3.11 or later and Git must be available on your
-PATH.
-
 ### Manual installation
 
-Copy `bin/git-vault` to a directory on your PATH:
-
-```sh
-mkdir -p "$HOME/.local/bin"
-install -m 755 bin/git-vault "$HOME/.local/bin/git-vault"
-# Add $HOME/.local/bin to PATH if it is not already there.
-git vault --help
-```
-
-For development, add this repository's `bin` directory to PATH instead.
+Copy [`bin/git-vault`](bin/git-vault) to a directory on your PATH:
 
 ## Quick start
 
@@ -65,13 +52,23 @@ mkdir -p "$HOME/.config/age"
 age-keygen -o "$HOME/.config/age/key.txt"
 ```
 
-The output includes a public key beginning with `age1`. Keep the identity file
-private; git-vault stores public keys, never the private identity.
+`age-keygen` writes an identity file in this form (and also prints the public key):
+
+```
+# created: 2026-10-17T21:53:43+09:00
+# public key: age19438ccrwjqpmjhjpvp40aclyjnpllhgru62uak84knzs5n4k3y6q6ej2tq
+AGE-SECRET-KEY-14S4CNP040N60QYYWSMGQ2225PSWKSHRCFRSW6954MY2XHC2T9U4QNV05FQ
+```
+
+The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...`
+comment is the matching public key. Pass that public key to `-r` when you
+initialize a vault or add recipients. Keep the identity file private; git-vault
+stores public keys only, never the private key.
 
 Inside your application repository:
 
 ```sh
-git vault init -r age1...
+git vault init -r age...
 git vault save .env
 git vault list
 git push origin vault
@@ -102,7 +99,7 @@ git vault restore -f -i "$HOME/.config/age/key.txt" .env
 Profiles group files and recipients in the same vault branch:
 
 ```sh
-git vault profiles add production -r age1...
+git vault profiles add production -r age...
 git vault save -p production .env
 git vault list -p production
 git vault profiles list
@@ -150,7 +147,7 @@ when the operation exits normally, fails, or is interrupted with Ctrl-C.
 ## Recipients
 
 A recipient is who may use a profile's secrets (a person, bot, or role). Each
-recipient is represented by one age public key (`age1...`), matching age's own
+recipient is represented by one age public key (`age...`), matching age's own
 wording. Labels describe the recipient; encryption and identity checks use the
 public key.
 
@@ -158,8 +155,8 @@ Each profile has its own recipient list:
 
 ```sh
 git vault recipients list -p production
-git vault recipients add -p production -i /path/to/identity -l "deploy bot" age1...
-git vault recipients remove -p production age1... < /path/to/identity
+git vault recipients add -p production -i /path/to/identity -l "deploy bot" age...
+git vault recipients remove -p production age... < /path/to/identity
 ```
 
 Optional `-l` / `--label` attaches a non-unique description (owner, purpose, and so
@@ -196,7 +193,7 @@ routine restore when a narrower key is enough. Removing it from a profile still
 leaves historical commits decryptable by anyone who held it, as with any key
 removal.
 
-The initial version supports native age public keys (`age1...`), not SSH keys or
+The initial version supports native age public keys (`age...`), not SSH keys or
 plugins. Removing a public key does not revoke access to historical ciphertext.
 
 ## Commit messages
@@ -284,7 +281,7 @@ Merge and squash commit messages need no special prefix or trailer.
 ## Command reference
 
 Options follow the operation: `git vault save -p production .env`, or
-`git vault recipients add -p production age1...`.
+`git vault recipients add -p production age...`.
 
 Paths are relative to the current directory; `-a` uses stored repository-relative
 paths. Use `--` before file names beginning with `-`. Force does not bypass symlink,

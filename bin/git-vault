@@ -102,6 +102,21 @@ Use it only when the task calls for the entire profile; a missing source fails
 the operation. Commit messages are public. Omit `-m` for a generated message
 prefixed with `git-vault:`; never put secret values in a message.
 
+## Age identity files
+
+`age-keygen` writes an identity file like:
+
+```
+# created: 2026-10-17T21:53:43+09:00
+# public key: age19438ccrwjqpmjhjpvp40aclyjnpllhgru62uak84knzs5n4k3y6q6ej2tq
+AGE-SECRET-KEY-14S4CNP040N60QYYWSMGQ2225PSWKSHRCFRSW6954MY2XHC2T9U4QNV05FQ
+```
+
+The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...`
+comment is the matching public key. Use that public key with `-r` / recipients.
+Use the identity file (or its private key) with `-i` / stdin to decrypt. Never
+read, print, or pass the private key in conversation or command arguments.
+
 ## Restore files
 
 ```sh
@@ -136,13 +151,14 @@ git branch --track vault origin/vault
 ```
 
 For a new vault or profile, obtain the intended age public keys from the user
-or project context. Native age public keys start with `age1`.
+or project context. Native age public keys look like `age...` (see Age identity
+files above).
 
 ```sh
-git vault init -r age1...
-git vault profiles add production -r age1...
-git vault recipients add -p production -i /path/to/identity age1...
-git vault recipients remove -p production -i /path/to/identity age1...
+git vault init -r age...
+git vault profiles add production -r age...
+git vault recipients add -p production -i /path/to/identity age...
+git vault recipients remove -p production -i /path/to/identity age...
 git vault remove -p production -- .env
 git vault profiles remove production
 ```
@@ -251,7 +267,7 @@ def valid_path(name):
     return name
 
 
-AGE_RECIPIENT = re.compile(r"age1[023456789acdefghjklmnpqrstuvwxyz]{58}")
+AGE_RECIPIENT = re.compile(r"age[0-9a-z]{59}")
 
 
 def valid_label(label):
@@ -273,12 +289,12 @@ def normalize_recipients(pairs):
     by_key = {}
     for key, label in pairs:
         if not AGE_RECIPIENT.fullmatch(key):
-            raise VaultError("At least one valid native age public key (age1...) is required.")
+            raise VaultError("At least one valid native age public key (age...) is required.")
         if key in by_key and by_key[key] != label:
             raise VaultError(f"Conflicting labels for public key: {key}", 2)
         by_key[key] = label
     if not by_key:
-        raise VaultError("At least one valid native age public key (age1...) is required.")
+        raise VaultError("At least one valid native age public key (age...) is required.")
     return sorted(by_key.items())
 
 
@@ -752,7 +768,7 @@ def parser_for_cli():
     epilog = """Requires Python 3.11+, git, and age. No Python packages are needed.
 
 Examples:
-  git vault init -r age1...
+  git vault init -r age...
   git vault save -p production -m 'Rotate credentials' -- .env
   git vault restore -a < /path/to/identity
   git vault save -b vault-update -n -B origin/vault -- .env
