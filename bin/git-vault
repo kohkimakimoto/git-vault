@@ -15,7 +15,7 @@ import subprocess
 import sys
 import tempfile
 
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 
 DEFAULT_SKILL_PATH = ".agents/skills/git-vault/SKILL.md"
 
@@ -146,12 +146,15 @@ git vault remove -p production -- .env
 git vault profiles remove production
 ```
 
-Repeat `-r` to initialize with multiple recipients. Recipient changes re-encrypt
-all files in the selected profile and commit the list and ciphertext together;
-an identity that can decrypt every file is needed unless the profile is empty.
-Failure leaves the branch unchanged. The last recipient cannot be removed.
-Profiles can be removed only when empty, and `default` cannot be removed.
-These updates also support `-b`, `-n`, and `-B` (except `init`).
+Repeat `-r` to initialize with multiple recipients. Optional `-l` sets a
+non-unique label for each recipient in the same order (zero labels, or one per
+key). Labels are metadata only; identify recipients by public key. Recipient
+changes re-encrypt all files in the selected profile and commit the list and
+ciphertext together; an identity that can decrypt every file is needed unless
+the profile is empty. Failure leaves the branch unchanged. The last recipient
+cannot be removed. Profiles can be removed only when empty, and `default`
+cannot be removed. These updates also support `-b`, `-n`, and `-B` (except
+`init`).
 
 ## Git integration and limits
 
@@ -169,7 +172,8 @@ Ignore settings are the user's responsibility; git-vault does not manage them.
 Saving keeps plaintext, restoring creates plaintext, and removal only changes the
 current vault snapshot. Clones and history retain old ciphertext, so deleting a
 file or recipient does not revoke access to past versions. File names, recipients,
-profile names, sizes, and commit metadata are public within the repository.
+recipient labels, profile names, sizes, and commit metadata are public within the
+repository.
 
 On failure, inspect stderr without exposing keys or plaintext. Exit codes are
 0 for success, 1 for operation failure, 2 for invalid arguments, and 3 for a
@@ -242,11 +246,62 @@ def valid_path(name):
     return name
 
 
-def recipient_list(keys):
-    keys = sorted(set(keys))
-    if not keys or any(not re.fullmatch(r"age1[023456789acdefghjklmnpqrstuvwxyz]{58}", k) for k in keys):
+AGE_RECIPIENT = re.compile(r"age1[023456789acdefghjklmnpqrstuvwxyz]{58}")
+
+
+def valid_label(label):
+    if not label or not label.strip() or "\0" in label or "\n" in label or "\r" in label:
+        raise VaultError("Recipient labels must be nonempty and contain no NUL or newlines.", 2)
+    return label
+
+
+def pair_recipients(keys, labels):
+    labels = list(labels or [])
+    if labels and len(labels) != len(keys):
+        raise VaultError("Provide zero labels or one label per recipient.", 2)
+    if not labels:
+        return [(key, None) for key in keys]
+    return list(zip(keys, [valid_label(label) for label in labels], strict=True))
+
+
+def normalize_recipients(pairs):
+    by_key = {}
+    for key, label in pairs:
+        if not AGE_RECIPIENT.fullmatch(key):
+            raise VaultError("At least one valid native age recipient (age1...) is required.")
+        if key in by_key and by_key[key] != label:
+            raise VaultError(f"Conflicting labels for recipient: {key}", 2)
+        by_key[key] = label
+    if not by_key:
         raise VaultError("At least one valid native age recipient (age1...) is required.")
-    return keys
+    return sorted(by_key.items())
+
+
+def recipient_keys(recipients):
+    return [key for key, _ in recipients]
+
+
+def format_recipient_line(key, label):
+    return f"{key} {label}" if label else key
+
+
+def parse_recipients_text(text):
+    if not text.endswith("\n"):
+        raise VaultError("Invalid recipients file.")
+    lines = text.splitlines()
+    if not lines:
+        raise VaultError("Invalid recipients file.")
+    pairs = []
+    for line in lines:
+        if " " in line:
+            key, label = line.split(" ", 1)
+            pairs.append((key, valid_label(label)))
+        else:
+            pairs.append((line, None))
+    recipients = normalize_recipients(pairs)
+    if [format_recipient_line(key, label) for key, label in recipients] != lines:
+        raise VaultError("Invalid recipients file.")
+    return recipients
 
 
 def encrypt(data, keys):
@@ -256,10 +311,14 @@ def encrypt(data, keys):
     return run(command, data, private=True).stdout
 
 
-def validate_recipients(keys):
-    keys = recipient_list(keys)
-    encrypt(b"", keys)  # Let age validate the Bech32 checksum as well.
-    return keys
+def validate_recipients(pairs):
+    recipients = normalize_recipients(pairs)
+    encrypt(b"", recipient_keys(recipients))  # Let age validate the Bech32 checksum as well.
+    return recipients
+
+
+def recipients_from_args(keys, labels):
+    return validate_recipients(pair_recipients(keys, labels))
 
 
 @contextmanager
@@ -378,10 +437,10 @@ class Repository:
                     text = self.blob(object_id).decode("utf-8")
                 except UnicodeError:
                     raise VaultError("Recipients must be UTF-8.") from None
-                keys = text.splitlines()
-                if not text.endswith("\n") or keys != sorted(set(keys)):
-                    raise VaultError(f"Invalid recipients file in profile {profile_name}")
-                profile.recipients = recipient_list(keys)
+                try:
+                    profile.recipients = parse_recipients_text(text)
+                except VaultError as error:
+                    raise VaultError(f"Invalid recipients file in profile {profile_name}") from error
             elif len(parts) >= 3 and parts[1] == "files":
                 profile.files[valid_path("/".join(parts[2:]))] = object_id
             else:
@@ -404,7 +463,8 @@ class Repository:
         flat = {}
         for name, profile in profiles.items():
             base = f"{name}/"
-            flat[base + "recipients"] = self.hash_blob(("\n".join(profile.recipients) + "\n").encode())
+            body = "\n".join(format_recipient_line(key, label) for key, label in profile.recipients) + "\n"
+            flat[base + "recipients"] = self.hash_blob(body.encode())
             for path, oid in profile.files.items():
                 flat[base + "files/" + path] = oid
         nested = {}
@@ -582,7 +642,7 @@ def execute(args):
         if old_oid:
             raise VaultError(f"Branch already exists: {branch}")
         message = message_for(args)
-        profiles = {"default": Profile(validate_recipients(args.recipient), {})}
+        profiles = {"default": Profile(recipients_from_args(args.recipient, args.label), {})}
         repo.commit(ref, None, None, profiles, message)
         return
     new = getattr(args, "new_branch", False)
@@ -609,7 +669,7 @@ def execute(args):
         if action == "add":
             if name in profiles:
                 raise VaultError(f"Profile already exists: {name}")
-            profiles[name] = Profile(validate_recipients(args.recipient), {})
+            profiles[name] = Profile(recipients_from_args(args.recipient, args.label), {})
         else:
             if name not in profiles:
                 raise VaultError(f"Profile does not exist: {name}")
@@ -623,20 +683,22 @@ def execute(args):
         raise VaultError(f"Profile does not exist: {args.profile}")
     profile = profiles[args.profile]
     if args.operation == "recipients-list":
-        print("\n".join(profile.recipients))
+        print("\n".join(format_recipient_line(key, label) for key, label in profile.recipients))
         return
     if args.operation.startswith("recipients-"):
-        supplied = recipient_list(args.keys)
-        existing = set(profile.recipients)
+        existing = dict(profile.recipients)
         if args.operation == "recipients-add":
-            if existing.intersection(supplied):
+            supplied = dict(normalize_recipients(pair_recipients(args.keys, args.label)))
+            if existing.keys() & supplied.keys():
                 raise VaultError("A recipient is already present.")
-            keys = validate_recipients(existing.union(supplied))
+            recipients = validate_recipients([*existing.items(), *supplied.items()])
         else:
-            if not set(supplied).issubset(existing):
+            supplied = {key for key, _ in normalize_recipients([(key, None) for key in args.keys])}
+            if not supplied.issubset(existing):
                 raise VaultError("A recipient is not present.")
-            keys = validate_recipients(existing.difference(supplied))
+            recipients = validate_recipients([(key, label) for key, label in existing.items() if key not in supplied])
         message = message_for(args)
+        keys = recipient_keys(recipients)
         if profile.files:
             with identities(args.identity) as identity_paths:
                 files = {}
@@ -644,7 +706,7 @@ def execute(args):
                     plaintext = decrypt(repo.blob(oid), identity_paths)
                     files[name] = repo.hash_blob(encrypt(plaintext, keys))
             profile.files = files
-        profile.recipients = keys
+        profile.recipients = recipients
         repo.commit(ref, old_oid, parent, profiles, message)
         return
     if args.operation == "list":
@@ -672,8 +734,9 @@ def execute(args):
             if name.encode() in tracked and not args.force:
                 raise VaultError(f"Refusing to save tracked file: {name}. Use -f.")
             paths.append(path)
+        keys = recipient_keys(profile.recipients)
         for name, path in zip(names, paths):
-            profile.files[name] = repo.hash_blob(encrypt(path.read_bytes(), profile.recipients))
+            profile.files[name] = repo.hash_blob(encrypt(path.read_bytes(), keys))
     if not names:
         print("No files.")
         return
@@ -716,7 +779,7 @@ Plaintext exclusion is your responsibility; ignore settings are never modified.
 
     def leaf(
         group, name, operation, description, profile=False, update=False,
-        create=False, identity=False, recipient=False,
+        create=False, identity=False, recipient=False, label=False,
     ):
         p = group.add_parser(
             name, description=description, help=description, epilog=epilog,
@@ -746,9 +809,14 @@ Plaintext exclusion is your responsibility; ignore settings are never modified.
                 "-r", "--recipient", action="append", required=True, metavar="KEY",
                 help="Add a native age public key; repeat for multiple recipients.",
             )
+        if label:
+            p.add_argument(
+                "-l", "--label", action="append", metavar="TEXT",
+                help="Set an optional recipient label; repeat once per recipient in the same order.",
+            )
         return p
 
-    leaf(commands, "init", "init", "Initialize an independent vault branch.", update=True, recipient=True)
+    leaf(commands, "init", "init", "Initialize an independent vault branch.", update=True, recipient=True, label=True)
     for name in ("profiles", "recipients"):
         group_parser = commands.add_parser(name, help=f"Manage {name}.")
         group = group_parser.add_subparsers(dest="action", required=True)
@@ -758,6 +826,7 @@ Plaintext exclusion is your responsibility; ignore settings are never modified.
                 group, action, name + "-" + action, f"{action.capitalize()} {name}.",
                 profile=name == "recipients", update=True, create=True,
                 identity=name == "recipients", recipient=name == "profiles" and action == "add",
+                label=(name == "profiles" and action == "add") or (name == "recipients" and action == "add"),
             )
             if name == "profiles":
                 p.add_argument("name", metavar="NAME", help="Name the profile.")
