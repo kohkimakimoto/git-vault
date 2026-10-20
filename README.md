@@ -153,9 +153,15 @@ Each profile has its own public recipients:
 
 ```sh
 git vault recipients list -p production
-git vault recipients add -p production -i /path/to/identity age1...
+git vault recipients add -p production -i /path/to/identity -l "deploy bot" age1...
 git vault recipients remove -p production age1... < /path/to/identity
 ```
+
+Optional `-l` / `--label` attaches a non-unique description (owner, purpose, and so
+on) when adding recipients via `init`, `profiles add`, or `recipients add`. Provide
+zero labels, or one label per key in the same order. Labels are metadata only;
+removal and identity checks use the public key. Labels cannot be changed later
+except by removing and re-adding the recipient.
 
 Adding or removing recipients re-encrypts **every file in that profile** and commits
 the new recipients and ciphertexts together. You must be able to decrypt all of
@@ -261,7 +267,7 @@ generated.
 ### `init`
 
 ```sh
-git vault init [options] -r KEY [-r KEY ...]
+git vault init [options] -r KEY [-r KEY ...] [-l TEXT ...]
 ```
 
 Initialize an independent vault branch with a `default` profile. The branch must not already exist. This command creates the branch itself and does not accept `-n` or `-B`.
@@ -270,6 +276,7 @@ Initialize an independent vault branch with a `default` profile. The branch must
 | --- | --- |
 | `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
 | `-r`, `--recipient KEY` | Required native age public recipient; repeat for multiple recipients. |
+| `-l`, `--label TEXT` | Optional recipient label; repeat once per `-r` in the same order, or omit. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
 | `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
 | `-h`, `--help` | Show help. |
@@ -290,7 +297,7 @@ List all profiles in the selected branch.
 ### `profiles add`
 
 ```sh
-git vault profiles add [options] NAME -r KEY [-r KEY ...]
+git vault profiles add [options] NAME -r KEY [-r KEY ...] [-l TEXT ...]
 ```
 
 Create the profile named `NAME` with its own recipients and no files. The profile must not already exist. Profile names begin with an ASCII letter or digit and contain only letters, digits, `.`, `_`, and `-`.
@@ -299,6 +306,7 @@ Create the profile named `NAME` with its own recipients and no files. The profil
 | --- | --- |
 | `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
 | `-r`, `--recipient KEY` | Required native age public recipient; repeat for multiple recipients. |
+| `-l`, `--label TEXT` | Optional recipient label; repeat once per `-r` in the same order, or omit. |
 | `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
@@ -328,7 +336,7 @@ Remove the profile named `NAME`. It must be empty and cannot be `default`.
 git vault recipients list [options]
 ```
 
-List public recipients for the selected profile.
+List public recipients for the selected profile. Each line is `KEY` or `KEY LABEL`, matching the stored recipients file.
 
 | Option | Purpose |
 | --- | --- |
@@ -339,7 +347,7 @@ List public recipients for the selected profile.
 ### `recipients add`
 
 ```sh
-git vault recipients add [options] KEY...
+git vault recipients add [options] [-l TEXT ...] KEY...
 ```
 
 Add the public recipients specified by `KEY...` and re-encrypt every saved file in the profile in one commit. Existing recipients are rejected. A private identity is needed unless the profile is empty.
@@ -349,6 +357,7 @@ Add the public recipients specified by `KEY...` and re-encrypt every saved file 
 | `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
 | `-p`, `--profile NAME` | Target profile (default: `default`). |
 | `-i`, `--identity PATH` | Private identity file; repeat for multiple files. If omitted, read stdin or prompt without echo. |
+| `-l`, `--label TEXT` | Optional recipient label; repeat once per `KEY` in the same order, or omit. |
 | `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
@@ -452,7 +461,7 @@ Remove the specified paths from the current saved snapshot in one commit. Keep w
 git vault version
 ```
 
-Print the version hardcoded in the script, such as `0.5.0`. No repository or age
+Print the version hardcoded in the script, such as `0.6.0`. No repository or age
 installation is required.
 
 | Option | Purpose |
@@ -505,8 +514,9 @@ production/
 ```
 
 Every file under `files/` is binary age ciphertext, regardless of its name. Original
-relative paths are preserved without extra extensions. Recipients are public,
-one per line. File names, sizes, profile names, and Git metadata remain visible.
+relative paths are preserved without extra extensions. Recipients are public, one
+per line as `KEY` or `KEY LABEL` (first space separates an optional label). File
+names, sizes, profile names, labels, and Git metadata remain visible.
 
 This layout and the `profiles` / `--profile` CLI replace the previous section
 format and commands. Old layouts and options are not supported; no migration is
@@ -536,9 +546,9 @@ bash tests/cases/03-recipients.sh
 `tests/common.sh` contains temporary-repository setup and small assertions. Each
 scenario creates disposable keys and repositories, isolates personal Git
 configuration, and cleans up afterward. Tests cover round trips, profiles,
-recipient rotation, working branches, messages, force handling, paths, historical
-restore, linked worktrees, remote divergence, failure atomicity, and agent skill
-output and installation.
+recipient rotation and labels, working branches, messages, force handling, paths,
+historical restore, linked worktrees, remote divergence, failure atomicity, and
+agent skill output and installation.
 
 There is no test framework or Python package dependency. Bash, Git, age, age-keygen,
 and Python (for git-vault itself) are required. A small Python helper drives the
