@@ -65,8 +65,8 @@ mkdir -p "$HOME/.config/age"
 age-keygen -o "$HOME/.config/age/key.txt"
 ```
 
-The output includes a public recipient beginning with `age1`. Keep the identity
-file private; git-vault stores public recipients, never the private identity.
+The output includes a public key beginning with `age1`. Keep the identity file
+private; git-vault stores public keys, never the private identity.
 
 Inside your application repository:
 
@@ -149,7 +149,12 @@ when the operation exits normally, fails, or is interrupted with Ctrl-C.
 
 ## Recipients
 
-Each profile has its own public recipients:
+A recipient is who may use a profile's secrets (a person, bot, or role). Each
+recipient is represented by one age public key (`age1...`), matching age's own
+wording. Labels describe the recipient; encryption and identity checks use the
+public key.
+
+Each profile has its own recipient list:
 
 ```sh
 git vault recipients list -p production
@@ -160,39 +165,39 @@ git vault recipients remove -p production age1... < /path/to/identity
 Optional `-l` / `--label` attaches a non-unique description (owner, purpose, and so
 on) when adding recipients via `init`, `profiles add`, or `recipients add`. Provide
 zero labels, or one label per key in the same order. Labels are metadata only;
-removal and identity checks use the public key. Labels cannot be changed later
-except by removing and re-adding the recipient.
+removal and matching use the public key. Labels cannot be changed later except by
+removing and re-adding the recipient.
 
 `recipients add` and `recipients remove` do not only edit the public key list.
 When the profile has saved files, git-vault must **decrypt every ciphertext with a
-private identity, then re-encrypt it for the updated recipient set**, and commit
+private identity, then re-encrypt it for the updated public keys**, and commit
 the new list and ciphertexts together. That is why a private key is required
 unless the profile is empty: age ciphertext cannot be rewritten from public keys
 alone. If any decryption or encryption fails, the branch is not updated. The last
-recipient cannot be removed.
+public key cannot be removed.
 
 Among CLI commands, only these operations need a private identity:
 
 - `recipients add` / `recipients remove` — decrypt then re-encrypt (when files exist)
 - `restore` — decrypt into the working tree
 
-`save`, `init`, `profiles add`, and similar commands use public recipients only.
+`save`, `init`, `profiles add`, and similar commands use public keys only.
 
 ### Recommended practice: a master key
 
-Include one privileged public recipient in **every** profile (for example at
-`init` and each `profiles add`), and keep that identity available for
-`recipients add` / `remove` and emergency restore across profiles.
+Include one privileged public key in **every** profile (for example at `init` and
+each `profiles add`), and keep that identity available for `recipients add` /
+`remove` and emergency restore across profiles.
 
 Treat that identity as high privilege: it can decrypt the current snapshot of every
 profile where it is listed. Store it offline or with strict access control, prefer
 a clear `-l` label such as `master`, and avoid using it as the day-to-day key for
 routine restore when a narrower key is enough. Removing it from a profile still
-leaves historical commits decryptable by anyone who held it, as with any recipient
+leaves historical commits decryptable by anyone who held it, as with any key
 removal.
 
-The initial version supports native age recipients (`age1...`), not SSH recipients
-or plugins. Removing a recipient does not revoke access to historical ciphertext.
+The initial version supports native age public keys (`age1...`), not SSH keys or
+plugins. Removing a public key does not revoke access to historical ciphertext.
 
 ## Commit messages
 
@@ -298,7 +303,7 @@ Initialize an independent vault branch with a `default` profile. The branch must
 | Option | Purpose |
 | --- | --- |
 | `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
-| `-r`, `--recipient KEY` | Required native age public recipient; repeat for multiple recipients. |
+| `-r`, `--recipient KEY` | Required native age public key; repeat for multiple keys. |
 | `-l`, `--label TEXT` | Optional recipient label; repeat once per `-r` in the same order, or omit. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
 | `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
@@ -328,7 +333,7 @@ Create the profile named `NAME` with its own recipients and no files. The profil
 | Option | Purpose |
 | --- | --- |
 | `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
-| `-r`, `--recipient KEY` | Required native age public recipient; repeat for multiple recipients. |
+| `-r`, `--recipient KEY` | Required native age public key; repeat for multiple keys. |
 | `-l`, `--label TEXT` | Optional recipient label; repeat once per `-r` in the same order, or omit. |
 | `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
@@ -359,7 +364,7 @@ Remove the profile named `NAME`. It must be empty and cannot be `default`.
 git vault recipients list [options]
 ```
 
-List public recipients for the selected profile. Each line is `KEY` or `KEY LABEL`, matching the stored recipients file.
+List recipients for the selected profile. Each line is `KEY` or `KEY LABEL`, matching the stored recipients file.
 
 | Option | Purpose |
 | --- | --- |
@@ -373,7 +378,7 @@ List public recipients for the selected profile. Each line is `KEY` or `KEY LABE
 git vault recipients add [options] [-l TEXT ...] KEY...
 ```
 
-Add the public recipients specified by `KEY...`. When the profile has files, decrypt each ciphertext and re-encrypt it for the updated recipient set in one commit. Existing recipients are rejected. A private identity is needed for that decrypt step unless the profile is empty.
+Add the public keys specified by `KEY...`. When the profile has files, decrypt each ciphertext and re-encrypt it for the updated public keys in one commit. Existing public keys are rejected. A private identity is needed for that decrypt step unless the profile is empty.
 
 | Option | Purpose |
 | --- | --- |
@@ -393,7 +398,7 @@ Add the public recipients specified by `KEY...`. When the profile has files, dec
 git vault recipients remove [options] KEY...
 ```
 
-Remove the public recipients specified by `KEY...`. When the profile has files, decrypt each ciphertext and re-encrypt it for the remaining recipients in one commit. Unknown recipients and removal of the last recipient are rejected. A private identity is needed for that decrypt step unless the profile is empty. Past commits are unchanged.
+Remove the public keys specified by `KEY...`. When the profile has files, decrypt each ciphertext and re-encrypt it for the remaining public keys in one commit. Unknown keys and removal of the last public key are rejected. A private identity is needed for that decrypt step unless the profile is empty. Past commits are unchanged.
 
 | Option | Purpose |
 | --- | --- |
@@ -537,9 +542,10 @@ production/
 ```
 
 Every file under `files/` is binary age ciphertext, regardless of its name. Original
-relative paths are preserved without extra extensions. Recipients are public, one
-per line as `KEY` or `KEY LABEL` (first space separates an optional label). File
-names, sizes, profile names, labels, and Git metadata remain visible.
+relative paths are preserved without extra extensions. The recipients file lists
+public keys, one per line as `KEY` or `KEY LABEL` (first space separates an
+optional label). File names, sizes, profile names, labels, and Git metadata remain
+visible.
 
 This layout and the `profiles` / `--profile` CLI replace the previous section
 format and commands. Old layouts and options are not supported; no migration is

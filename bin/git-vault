@@ -61,8 +61,9 @@ works after installation or repair before continuing.
 The default local branch is `vault` and the default profile is `default`.
 Each profile is a root directory in that branch, with public keys at
 `<profile>/recipients` and ciphertext at `<profile>/files/<original-path>`.
-Profiles group files and recipients within the same branch. Before updating an
-existing vault, inspect its profiles, saved paths, and public recipients:
+A recipient is who may use the secrets; each is one age public key. Profiles
+group files and recipients within the same branch. Before updating an existing
+vault, inspect its profiles, saved paths, and public keys:
 
 ```sh
 git vault profiles list
@@ -134,7 +135,7 @@ exists, use that history instead of creating an independent vault:
 git branch --track vault origin/vault
 ```
 
-For a new vault or profile, obtain the intended public recipients from the user
+For a new vault or profile, obtain the intended age public keys from the user
 or project context. Native age public keys start with `age1`.
 
 ```sh
@@ -146,17 +147,17 @@ git vault remove -p production -- .env
 git vault profiles remove production
 ```
 
-Repeat `-r` to initialize with multiple recipients. Optional `-l` sets a
+Repeat `-r` to initialize with multiple public keys. Optional `-l` sets a
 non-unique label for each recipient in the same order (zero labels, or one per
 key). Labels are metadata only; identify recipients by public key.
 
 `recipients add` and `recipients remove` decrypt every saved file in the profile,
-then re-encrypt for the updated recipient set, and commit the list and ciphertext
+then re-encrypt for the updated public keys, and commit the list and ciphertext
 together. A private identity is required for that decrypt step unless the profile
 is empty; public keys alone cannot rewrite age ciphertext. `restore` also needs a
 private identity. Prefer including one master public key in every profile, and
 treat its private key as high privilege. Failure leaves the branch unchanged. The
-last recipient cannot be removed. Profiles can be removed only when empty, and
+last public key cannot be removed. Profiles can be removed only when empty, and
 `default` cannot be removed. These updates also support `-b`, `-n`, and `-B`
 (except `init`).
 
@@ -262,7 +263,7 @@ def valid_label(label):
 def pair_recipients(keys, labels):
     labels = list(labels or [])
     if labels and len(labels) != len(keys):
-        raise VaultError("Provide zero labels or one label per recipient.", 2)
+        raise VaultError("Provide zero labels or one label per public key.", 2)
     if not labels:
         return [(key, None) for key in keys]
     return list(zip(keys, [valid_label(label) for label in labels], strict=True))
@@ -272,12 +273,12 @@ def normalize_recipients(pairs):
     by_key = {}
     for key, label in pairs:
         if not AGE_RECIPIENT.fullmatch(key):
-            raise VaultError("At least one valid native age recipient (age1...) is required.")
+            raise VaultError("At least one valid native age public key (age1...) is required.")
         if key in by_key and by_key[key] != label:
-            raise VaultError(f"Conflicting labels for recipient: {key}", 2)
+            raise VaultError(f"Conflicting labels for public key: {key}", 2)
         by_key[key] = label
     if not by_key:
-        raise VaultError("At least one valid native age recipient (age1...) is required.")
+        raise VaultError("At least one valid native age public key (age1...) is required.")
     return sorted(by_key.items())
 
 
@@ -694,12 +695,12 @@ def execute(args):
         if args.operation == "recipients-add":
             supplied = dict(normalize_recipients(pair_recipients(args.keys, args.label)))
             if existing.keys() & supplied.keys():
-                raise VaultError("A recipient is already present.")
+                raise VaultError("A public key is already present.")
             recipients = validate_recipients([*existing.items(), *supplied.items()])
         else:
             supplied = {key for key, _ in normalize_recipients([(key, None) for key in args.keys])}
             if not supplied.issubset(existing):
-                raise VaultError("A recipient is not present.")
+                raise VaultError("A public key is not present.")
             recipients = validate_recipients([(key, label) for key, label in existing.items() if key not in supplied])
         message = message_for(args)
         keys = recipient_keys(recipients)
@@ -811,12 +812,12 @@ Plaintext exclusion is your responsibility; ignore settings are never modified.
         if recipient:
             p.add_argument(
                 "-r", "--recipient", action="append", required=True, metavar="KEY",
-                help="Add a native age public key; repeat for multiple recipients.",
+                help="Add a native age public key; repeat for multiple keys.",
             )
         if label:
             p.add_argument(
                 "-l", "--label", action="append", metavar="TEXT",
-                help="Set an optional recipient label; repeat once per recipient in the same order.",
+                help="Set an optional recipient label; repeat once per public key in the same order.",
             )
         return p
 
