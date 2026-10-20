@@ -272,7 +272,6 @@ Initialize an independent vault branch with a `default` profile. The branch must
 | `-r`, `--recipient KEY` | Required native age public recipient; repeat for multiple recipients. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
 | `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
-| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
 | `-h`, `--help` | Show help. |
 
 ### `profiles list`
@@ -286,7 +285,6 @@ List all profiles in the selected branch.
 | Option | Purpose |
 | --- | --- |
 | `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
-| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
 | `-h`, `--help` | Show help. |
 
 ### `profiles add`
@@ -305,7 +303,6 @@ Create the profile named `NAME` with its own recipients and no files. The profil
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
 | `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
-| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
 | `-h`, `--help` | Show help. |
 
 ### `profiles remove`
@@ -323,7 +320,6 @@ Remove the profile named `NAME`. It must be empty and cannot be `default`.
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
 | `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
-| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
 | `-h`, `--help` | Show help. |
 
 ### `recipients list`
@@ -338,7 +334,6 @@ List public recipients for the selected profile.
 | --- | --- |
 | `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
 | `-p`, `--profile NAME` | Target profile (default: `default`). |
-| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
 | `-h`, `--help` | Show help. |
 
 ### `recipients add`
@@ -358,7 +353,6 @@ Add the public recipients specified by `KEY...` and re-encrypt every saved file 
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
 | `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
-| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
 | `-h`, `--help` | Show help. |
 
 ### `recipients remove`
@@ -378,7 +372,6 @@ Remove the public recipients specified by `KEY...` and re-encrypt every saved fi
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
 | `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
-| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
 | `-h`, `--help` | Show help. |
 
 ### `save`
@@ -400,7 +393,6 @@ Encrypt files and append a commit to the selected branch. Unspecified files are 
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
 | `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
-| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
 | `-h`, `--help` | Show help. |
 
 ### `list`
@@ -415,7 +407,6 @@ List the original repository-relative paths saved in the selected profile.
 | --- | --- |
 | `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
 | `-p`, `--profile NAME` | Target profile (default: `default`). |
-| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
 | `-h`, `--help` | Show help. |
 
 ### `restore`
@@ -435,7 +426,6 @@ Decrypt files into the working tree. Without `-f`, existing files and tracked pa
 | `-a`, `--all` | Restore all saved paths in the selected profile and revision; mutually exclusive with explicit paths. |
 | `-f`, `--force` | Overwrite existing or tracked files, including uncommitted working-tree changes; leave the index unchanged. |
 | `-R`, `--revision REV` | Restore from a commit reachable from the target branch (default: branch tip). |
-| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
 | `-h`, `--help` | Show help. |
 
 ### `remove`
@@ -454,7 +444,6 @@ Remove the specified paths from the current saved snapshot in one commit. Keep w
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
 | `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
-| `-C`, `--no-color` | Disable ANSI colors. Current output is plain text. |
 | `-h`, `--help` | Show help. |
 
 ### `version`

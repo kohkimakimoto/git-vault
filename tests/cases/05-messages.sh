@@ -14,7 +14,7 @@ assert_eq "$(git log -1 --format=%B vault)" "$(cat "$TEST_ROOT/message")"
 expect_exit 2 git vault save -m '' .env
 expect_exit 2 git vault save -F - .env
 expect_exit 2 git vault save -m message -F "$TEST_ROOT/message" .env
-git vault list --no-color >"$TEST_ROOT/list"
+git vault list >"$TEST_ROOT/list"
 assert_eq "$(cat "$TEST_ROOT/list")" .env
 git vault -h >/dev/null
 git vault save -h >/dev/null

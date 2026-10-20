@@ -724,7 +724,6 @@ Plaintext exclusion is your responsibility; ignore settings are never modified.
         )
         p.set_defaults(operation=operation)
         p.add_argument("-b", "--branch", metavar="NAME", help="Select a local branch (default: vault).")
-        p.add_argument("-C", "--no-color", action="store_true", help="Disable ANSI colors.")
         if profile:
             p.add_argument("-p", "--profile", default="default", metavar="NAME", help="Select a profile (default: default).")
         if update:
