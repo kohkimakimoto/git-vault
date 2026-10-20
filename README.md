@@ -178,19 +178,18 @@ Among CLI commands, only these operations need a private identity:
 
 `save`, `init`, `profiles add`, and similar commands use public recipients only.
 
-### Recommended practice: a shared recovery key
+### Recommended practice: a master key
 
-git-vault does not define a built-in “master key”. As an operational pattern, it is
-often convenient to include one shared public recipient in **every** profile (for
-example at `init` and each `profiles add`), and keep that identity available for
+Include one privileged public recipient in **every** profile (for example at
+`init` and each `profiles add`), and keep that identity available for
 `recipients add` / `remove` and emergency restore across profiles.
 
 Treat that identity as high privilege: it can decrypt the current snapshot of every
 profile where it is listed. Store it offline or with strict access control, prefer
-a clear `-l` label such as `shared recovery`, and avoid using it as the day-to-day
-key for routine restore when a narrower key is enough. Removing it from a profile
-still leaves historical commits decryptable by anyone who held it, as with any
-recipient removal.
+a clear `-l` label such as `master`, and avoid using it as the day-to-day key for
+routine restore when a narrower key is enough. Removing it from a profile still
+leaves historical commits decryptable by anyone who held it, as with any recipient
+removal.
 
 The initial version supports native age recipients (`age1...`), not SSH recipients
 or plugins. Removing a recipient does not revoke access to historical ciphertext.
