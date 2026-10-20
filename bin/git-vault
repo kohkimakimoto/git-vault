@@ -148,13 +148,17 @@ git vault profiles remove production
 
 Repeat `-r` to initialize with multiple recipients. Optional `-l` sets a
 non-unique label for each recipient in the same order (zero labels, or one per
-key). Labels are metadata only; identify recipients by public key. Recipient
-changes re-encrypt all files in the selected profile and commit the list and
-ciphertext together; an identity that can decrypt every file is needed unless
-the profile is empty. Failure leaves the branch unchanged. The last recipient
-cannot be removed. Profiles can be removed only when empty, and `default`
-cannot be removed. These updates also support `-b`, `-n`, and `-B` (except
-`init`).
+key). Labels are metadata only; identify recipients by public key.
+
+`recipients add` and `recipients remove` decrypt every saved file in the profile,
+then re-encrypt for the updated recipient set, and commit the list and ciphertext
+together. A private identity is required for that decrypt step unless the profile
+is empty; public keys alone cannot rewrite age ciphertext. `restore` also needs a
+private identity. Prefer including one shared recovery public key in every profile
+as an operational practice (not a built-in feature), and treat its private key as
+high privilege. Failure leaves the branch unchanged. The last recipient cannot be
+removed. Profiles can be removed only when empty, and `default` cannot be removed.
+These updates also support `-b`, `-n`, and `-B` (except `init`).
 
 ## Git integration and limits
 

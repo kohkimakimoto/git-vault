@@ -163,10 +163,34 @@ zero labels, or one label per key in the same order. Labels are metadata only;
 removal and identity checks use the public key. Labels cannot be changed later
 except by removing and re-adding the recipient.
 
-Adding or removing recipients re-encrypts **every file in that profile** and commits
-the new recipients and ciphertexts together. You must be able to decrypt all of
-those files. If any decryption or encryption fails, the branch is not updated.
-Empty profiles do not require a private key. The last recipient cannot be removed.
+`recipients add` and `recipients remove` do not only edit the public key list.
+When the profile has saved files, git-vault must **decrypt every ciphertext with a
+private identity, then re-encrypt it for the updated recipient set**, and commit
+the new list and ciphertexts together. That is why a private key is required
+unless the profile is empty: age ciphertext cannot be rewritten from public keys
+alone. If any decryption or encryption fails, the branch is not updated. The last
+recipient cannot be removed.
+
+Among CLI commands, only these operations need a private identity:
+
+- `recipients add` / `recipients remove` — decrypt then re-encrypt (when files exist)
+- `restore` — decrypt into the working tree
+
+`save`, `init`, `profiles add`, and similar commands use public recipients only.
+
+### Recommended practice: a shared recovery key
+
+git-vault does not define a built-in “master key”. As an operational pattern, it is
+often convenient to include one shared public recipient in **every** profile (for
+example at `init` and each `profiles add`), and keep that identity available for
+`recipients add` / `remove` and emergency restore across profiles.
+
+Treat that identity as high privilege: it can decrypt the current snapshot of every
+profile where it is listed. Store it offline or with strict access control, prefer
+a clear `-l` label such as `shared recovery`, and avoid using it as the day-to-day
+key for routine restore when a narrower key is enough. Removing it from a profile
+still leaves historical commits decryptable by anyone who held it, as with any
+recipient removal.
 
 The initial version supports native age recipients (`age1...`), not SSH recipients
 or plugins. Removing a recipient does not revoke access to historical ciphertext.
@@ -350,13 +374,13 @@ List public recipients for the selected profile. Each line is `KEY` or `KEY LABE
 git vault recipients add [options] [-l TEXT ...] KEY...
 ```
 
-Add the public recipients specified by `KEY...` and re-encrypt every saved file in the profile in one commit. Existing recipients are rejected. A private identity is needed unless the profile is empty.
+Add the public recipients specified by `KEY...`. When the profile has files, decrypt each ciphertext and re-encrypt it for the updated recipient set in one commit. Existing recipients are rejected. A private identity is needed for that decrypt step unless the profile is empty.
 
 | Option | Purpose |
 | --- | --- |
 | `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
 | `-p`, `--profile NAME` | Target profile (default: `default`). |
-| `-i`, `--identity PATH` | Private identity file; repeat for multiple files. If omitted, read stdin or prompt without echo. |
+| `-i`, `--identity PATH` | Private identity used to decrypt existing files before re-encryption; repeat for multiple files. If omitted, read stdin or prompt without echo. Not needed when the profile has no files. |
 | `-l`, `--label TEXT` | Optional recipient label; repeat once per `KEY` in the same order, or omit. |
 | `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
@@ -370,13 +394,13 @@ Add the public recipients specified by `KEY...` and re-encrypt every saved file 
 git vault recipients remove [options] KEY...
 ```
 
-Remove the public recipients specified by `KEY...` and re-encrypt every saved file in the profile in one commit. Unknown recipients and removal of the last recipient are rejected. A private identity is needed unless the profile is empty. Past commits are unchanged.
+Remove the public recipients specified by `KEY...`. When the profile has files, decrypt each ciphertext and re-encrypt it for the remaining recipients in one commit. Unknown recipients and removal of the last recipient are rejected. A private identity is needed for that decrypt step unless the profile is empty. Past commits are unchanged.
 
 | Option | Purpose |
 | --- | --- |
 | `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
 | `-p`, `--profile NAME` | Target profile (default: `default`). |
-| `-i`, `--identity PATH` | Private identity file; repeat for multiple files. If omitted, read stdin or prompt without echo. |
+| `-i`, `--identity PATH` | Private identity used to decrypt existing files before re-encryption; repeat for multiple files. If omitted, read stdin or prompt without echo. Not needed when the profile has no files. |
 | `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
