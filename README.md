@@ -145,8 +145,8 @@ git vault restore -i - .env < /path/to/identity
 # Same via a pipe; -a restores every saved path in the profile
 cat /path/to/identity | git vault restore -a -i -
 
-# Set a user-wide default identity path
-git config --global vault.identity ~/.config/age/key.txt
+# Repository-local default (absolute path; see Recommended practice)
+git config vault.identity "$PWD/.git/vault.key"
 
 # Restore using vault.identity (no -i)
 git vault restore .env
@@ -156,22 +156,21 @@ git vault restore .env
 
 ### `vault.identity`
 
-Set a default identity file path with `git config` (the path to the file, not the key material):
+Set a default identity file path with `git config` (the path to the file, not the key material). The value must be an **absolute path** or start with `~`. Prefer a **repository-local** setting. The recommended layout is described under [Recommended practice](#recommended-practice).
 
 ```sh
-# User-wide default
-git config --global vault.identity ~/.config/age/key.txt
-
-# Repository-local default
-git config vault.identity ~/.config/age/key.txt
+# From the repository root: absolute path via $PWD
+git config vault.identity "$PWD/.git/vault.key"
 ```
 
-These commands write an entry like the following into the corresponding Git config file:
+This writes into the repository's Git config (typically `.git/config`), for example:
 
 ```ini
 [vault]
-	identity = ~/.config/age/key.txt
+	identity = /path/to/repo/.git/vault.key
 ```
+
+`git config --global vault.identity ...` is supported but not recommended for day-to-day use: it points every repository at the same default and encourages sharing one key across unrelated lifecycles.
 
 ## Recipients
 
@@ -210,13 +209,50 @@ Among CLI commands, only these operations need a private identity:
 
 `save`, `init`, `profiles add`, and similar commands use public keys only.
 
-### Recommended practice: a master key
+## Recommended practice
+
+git-vault stores ciphertext in Git history. Removing a recipient from the current tip does **not** make that identity useless against older commits, and rewriting or deleting remote history cannot control every clone that already exists. Treat access control as: current tip ACL, private-key custody, and (when needed) rotating the underlying secret values—not as complete cryptographic erasure of the past.
+
+### One identity per person per clone
+
+Prefer a dedicated age identity for each developer **and** each repository clone, not a shared development key and not one personal key reused across projects. Different repositories revoke access on different schedules; sharing a private key makes disposal hard.
+
+Keep that identity's lifecycle tied to the clone: store the private key inside the local Git directory and point repository-local `vault.identity` at it (absolute path). From the repository root:
+
+```sh
+age-keygen -o .git/vault.key
+chmod 600 .git/vault.key
+git config vault.identity "$PWD/.git/vault.key"
+```
+
+Give only the public key to the repository administrator for `init`, `profiles add`, or `recipients add`. The file under `.git/` is local to this clone and is not pushed. Deleting the clone directory from disk removes this working copy's key with it. That makes disposal easier; it does not dispose of copies elsewhere (other machines, backups, or a second clone). If you discard a clone while still developing, generate a new key for the next clone and have the administrator register the new public key (a master identity can restore and re-add as needed).
+
+Avoid `git config --global vault.identity` for day-to-day use.
+
+### Master key
 
 Include one privileged public key in **every** profile (for example at `init` and each `profiles add`), and keep that identity available for `recipients add` / `remove` and emergency restore across profiles.
 
-Treat that identity as high privilege: it can decrypt the current snapshot of every profile where it is listed. Store it offline or with strict access control, prefer a clear `-l` label such as `master`, and avoid using it as the day-to-day key for routine restore when a narrower key is enough. Removing it from a profile still leaves historical commits decryptable by anyone who held it, as with any key removal.
+Treat that identity as high privilege: it can decrypt the current snapshot of every profile where it is listed. Store it offline or with strict access control, prefer a clear `-l` label such as `master`, and avoid using it as the day-to-day key for routine restore when a narrower key is enough. Do not keep the master private key in a developer clone's `.git/vault.key`.
 
-Removing a public key does not revoke access to historical ciphertext.
+### What `recipients remove` does not do
+
+`recipients remove` updates the **current** vault tip only: it re-encrypts saved files for the remaining public keys and commits that snapshot. It does **not**:
+
+- Revoke access to historical commits (ciphertext in older commits stays encrypted to whoever was listed then)
+- Dispose of anyone's private key
+
+Repository-side removal is easy to misread as “that identity is now useless.” It is not. Anyone who still holds a private key that was a recipient at some past commit can decrypt those historical blobs if they still have the Git objects. After remove and re-encryption, that person should no longer reach **newly saved** secrets in that vault—treat remove alone as incomplete offboarding.
+
+### Offboarding
+
+When someone should lose access:
+
+1. Remove their public key from every profile that listed it (`recipients remove`), using a remaining privileged identity (typically the master key).
+2. Have them **delete the local clone from disk** so `.git/vault.key` for that repository goes with it. Also drop any other copies of that identity (other machines, backups, password managers, CI secrets). Keeping the folder after access is revoked leaves the private key in place.
+3. If past values must become useless even to someone who still holds an old identity or an old clone, rotate those secret values in the application and `save` again under the updated recipients.
+
+Rewriting remote vault history is optional hygiene for new clones; it does not control existing copies of old commits.
 
 ## Commit messages
 
