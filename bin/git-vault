@@ -46,7 +46,7 @@ If the command exists but fails, inspect the error and distinguish a missing ins
 
 ## Choose the target
 
-The default local branch is `vault` and the default profile is `default`. Each profile is a root directory in that branch, with public keys at `<profile>/recipients` and ciphertext at `<profile>/files/<original-path>`. A recipient is who may use the secrets; each is one age public key. Profiles group files and recipients within the same branch. Before updating an existing vault, inspect its profiles, saved paths, and public keys:
+The default local branch is `vault` and the default profile is `default`. Each profile is a root directory in that branch, with public keys at `<profile>/recipients.json` and ciphertext at `<profile>/files/<original-path>`. A recipient is who may use the secrets; each is one age public key. Profiles group files and recipients within the same branch. Before updating an existing vault, inspect its profiles, saved paths, and public keys:
 
 ```sh
 git vault profiles list
@@ -525,7 +525,7 @@ class Repository:
                 raise VaultError(f"Not a vault tree: unexpected entry {name}")
             profile_name = valid_profile(parts[0])
             profile = profiles.setdefault(profile_name, Profile([], {}))
-            if len(parts) == 2 and parts[1] == "recipients":
+            if len(parts) == 2 and parts[1] == "recipients.json":
                 try:
                     text = self.blob(object_id).decode("utf-8")
                 except UnicodeError:
@@ -556,7 +556,7 @@ class Repository:
         flat = {}
         for name, profile in profiles.items():
             base = f"{name}/"
-            flat[base + "recipients"] = self.hash_blob(dump_recipients_json(profile.recipients).encode())
+            flat[base + "recipients.json"] = self.hash_blob(dump_recipients_json(profile.recipients).encode())
             for path, oid in profile.files.items():
                 flat[base + "files/" + path] = oid
         nested = {}

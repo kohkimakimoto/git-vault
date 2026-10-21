@@ -10,7 +10,7 @@ sorted_lines "$RECIPIENT1  Alice laptop" "$RECIPIENT2  Bob (staging)" >"$TEST_RO
 git vault recipients list >"$TEST_ROOT/list"
 cmp "$TEST_ROOT/expected" "$TEST_ROOT/list"
 git vault recipients list --json >"$TEST_ROOT/listed.json"
-git show vault:default/recipients >"$TEST_ROOT/stored"
+git show vault:default/recipients.json >"$TEST_ROOT/stored"
 cmp "$TEST_ROOT/listed.json" "$TEST_ROOT/stored"
 expect_exit 2 git vault init -b other -R "$TEST_ROOT/init-recipients.txt" -l only-one
 expect_exit 2 git vault init -b other -r "$RECIPIENT1" -l ''

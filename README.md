@@ -177,7 +177,7 @@ These commands write an entry like the following into the corresponding Git conf
 
 A recipient is who may use a profile's secrets (a person, bot, or role). Each recipient is a public key (for example `age...` / `age1pq1...`, or SSH keys such as `ssh-ed25519` / `ssh-rsa`). Labels are git-vault metadata; encryption uses the public key. See age's documentation for supported key types.
 
-Each profile stores recipients as JSON at `<profile>/recipients`. CLI input uses `-r` / `-R`:
+Each profile stores recipients as JSON at `<profile>/recipients.json`. CLI input uses `-r` / `-R`:
 
 ```sh
 # List recipients in the production profile
@@ -539,11 +539,11 @@ Each profile occupies a directory at the root of the vault branch:
 
 ```text
 default/
-  recipients
+  recipients.json
   files/
     .env
 production/
-  recipients
+  recipients.json
   files/
     .env
 ```

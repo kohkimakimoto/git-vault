@@ -42,7 +42,7 @@ for arguments in (
         process.stdin.close()
 PY
 # Build malformed vault commits without checking out the vault branch.
-git show vault:default/recipients >"$TEST_ROOT/canonical.json"
+git show vault:default/recipients.json >"$TEST_ROOT/canonical.json"
 python3 - <<'PY'
 import json
 import os
@@ -70,7 +70,7 @@ for fixture in "$TEST_ROOT"/invalid-*.json; do
     blob="$(git hash-object -w "$fixture")"
     export GIT_INDEX_FILE="$TEST_ROOT/fixture-index"
     git read-tree vault
-    git update-index --cacheinfo "100644,$blob,default/recipients"
+    git update-index --cacheinfo "100644,$blob,default/recipients.json"
     tree="$(git write-tree)"
     unset GIT_INDEX_FILE
     commit="$(printf 'Malformed fixture\n' | git commit-tree "$tree")"
