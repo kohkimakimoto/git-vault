@@ -85,7 +85,7 @@ git vault save -p production -b vault-update-secrets -- credentials.json
 AGE-SECRET-KEY-14S4CNP040N60QYYWSMGQ2225PSWKSHRCFRSW6954MY2XHC2T9U4QNV05FQ
 ```
 
-The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` comment is the matching public key. Use that public key with `-r` / recipients. Use the identity file with `-i PATH` to decrypt. To read an identity from stdin, use `-i -` (like age). Optionally set `git config vault.identity /path/to/key` as a default when `-i` is omitted. Multiple native age secrets belong in one identity file. Do not combine `-i -` with `-R -`. Never read, print, or pass the private key in conversation or command arguments.
+The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` comment is the matching public key. Use that public key with `-r` / recipients. Use the identity file with `-i PATH` to decrypt. To read an identity from stdin, use `-i -`. Optionally set `git config vault.identity /path/to/key` as a default when `-i` is omitted. Multiple native age secrets belong in one identity file. Do not combine `-i -` with `-R -`. Never read, print, or pass the private key in conversation or command arguments.
 
 ## Restore files
 
@@ -882,6 +882,9 @@ Examples:
         group, name, operation, description, profile=False, update=False,
         create=False, identity=False, recipient=False, label=False, *,
         branch_help="Local branch to use (default: vault).",
+        identity_help="Identity file. Use -i - for stdin, or omit and use vault.identity.",
+        recipient_r_help="Public key. Cannot be combined with -R.",
+        recipient_R_help="Recipients file; - for stdin. Cannot be combined with -r.",
     ):
         p = group.add_parser(
             name, description=description, help=description, epilog=requirements,
@@ -910,17 +913,17 @@ Examples:
         if identity:
             p.add_argument(
                 "-i", "--identity", action=StoreOnce, metavar="PATH", default=None,
-                help="Identity file. Use -i - for stdin. Overrides vault.identity.",
+                help=identity_help,
             )
         if recipient:
             recipient_input = p.add_mutually_exclusive_group(required=True)
             recipient_input.add_argument(
                 "-r", "--recipient", action=StoreOnce, metavar="KEY", default=None,
-                help="Public key accepted by age. Cannot be combined with -R.",
+                help=recipient_r_help,
             )
             recipient_input.add_argument(
                 "-R", "--recipients-file", action=StoreOnce, metavar="PATH", default=None,
-                help="Recipients file (age -R format); - for stdin. Cannot be combined with -r.",
+                help=recipient_R_help,
             )
         if label:
             p.add_argument(
@@ -950,12 +953,31 @@ Examples:
         }
         for action in ("add", "remove"):
             description = (profile_actions if name == "profiles" else recipient_actions)[action]
+            recipient_kwargs = {}
+            if name == "recipients":
+                recipient_kwargs = {
+                    "identity_help": (
+                        "Identity for re-encryption. Use -i - for stdin, or vault.identity. "
+                        "Not needed when the profile has no files."
+                    ),
+                    "recipient_r_help": (
+                        "Public key to add. Cannot be combined with -R."
+                        if action == "add" else
+                        "Public key to remove. Cannot be combined with -R."
+                    ),
+                    "recipient_R_help": (
+                        "Recipients file; - for stdin. Cannot be combined with -r."
+                        if action == "add" else
+                        "Recipients file of keys to remove; - for stdin. Cannot be combined with -r."
+                    ),
+                }
             p = leaf(
                 group, action, name + "-" + action, description,
                 profile=name == "recipients", update=True, create=True,
                 identity=name == "recipients",
                 recipient=(name == "profiles" and action == "add") or (name == "recipients"),
                 label=(name == "profiles" and action == "add") or (name == "recipients" and action == "add"),
+                **recipient_kwargs,
             )
             if name == "profiles":
                 p.add_argument("name", metavar="NAME", help="Profile name.")

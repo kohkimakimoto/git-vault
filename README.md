@@ -141,9 +141,9 @@ These commands write an entry like the following into the corresponding Git conf
 
 ## Recipients
 
-A recipient is who may use a profile's secrets (a person, bot, or role). Each recipient is a public key accepted by age (native `age...` / `age1pq1...`, or SSH keys such as `ssh-ed25519` / `ssh-rsa`, subject to age). Labels are git-vault metadata; encryption uses the public key. See age's documentation for supported key types.
+A recipient is who may use a profile's secrets (a person, bot, or role). Each recipient is a public key (for example `age...` / `age1pq1...`, or SSH keys such as `ssh-ed25519` / `ssh-rsa`). Labels are git-vault metadata; encryption uses the public key. See age's documentation for supported key types.
 
-Each profile stores recipients as JSON at `<profile>/recipients`. CLI input uses `-r` / `-R` like age:
+Each profile stores recipients as JSON at `<profile>/recipients`. CLI input uses `-r` / `-R`:
 
 ```sh
 git vault recipients list -p production
@@ -154,7 +154,7 @@ git vault recipients remove -p production -i /path/to/identity -r age...
 git vault init -R teammates.txt
 ```
 
-Provide recipients with `-r KEY` or `-R PATH` (age-style; the two cannot be combined). `-R` may list several keys, one per line. Optional `-l` / `--label` attaches a non-unique description when adding via `init`, `profiles add`, or `recipients add`: omit labels, or pass one label per key. For `-R`, labels follow the file's key order, excluding empty lines and comment lines. Labels cannot be changed later except by removing and re-adding the recipient.
+Provide recipients with `-r KEY` or `-R PATH` (the two cannot be combined). `-R` may list several keys, one per line. Optional `-l` / `--label` attaches a non-unique description when adding via `init`, `profiles add`, or `recipients add`: omit labels, or pass one label per key. For `-R`, labels follow the file's key order, excluding empty lines and comment lines. Labels cannot be changed later except by removing and re-adding the recipient.
 
 `recipients add` and `recipients remove` do not only edit the public key list. When the profile has saved files, git-vault must **decrypt every ciphertext with a private identity, then re-encrypt it for the updated public keys**, and commit the new list and ciphertexts together. That is why a private key is required unless the profile is empty: age ciphertext cannot be rewritten from public keys alone. If any decryption or encryption fails, the branch is not updated. The last public key cannot be removed.
 
@@ -253,9 +253,9 @@ Initialize an independent vault branch with a `default` profile. The branch must
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Local branch to create (default: `vault`). Must not already exist. |
-| `-r`, `--recipient KEY` | Public key accepted by age. Cannot be combined with `-R`. |
-| `-R`, `--recipients-file PATH` | Recipients file (age `-R` format); `-` for stdin. Cannot be combined with `-r`. |
+| `-b`, `--branch NAME` | Local branch to create (default: `vault`). |
+| `-r`, `--recipient KEY` | Public key. Cannot be combined with `-R`. |
+| `-R`, `--recipients-file PATH` | Recipients file; `-` for stdin. Cannot be combined with `-r`. |
 | `-l`, `--label TEXT` | Optional label; omit, or one per key (`-r`) / per `-R` key line. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Cannot be combined with `-F`. |
 | `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Cannot be combined with `-m`. |
@@ -271,7 +271,7 @@ List all profiles in the selected branch.
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist. |
+| `-b`, `--branch NAME` | Local branch to use (default: `vault`). |
 | `-h`, `--help` | Show help. |
 
 ### `profiles add`
@@ -284,9 +284,9 @@ Create the profile named `NAME` with its own recipients and no files. The profil
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist, or pass `-n` to create it. |
-| `-r`, `--recipient KEY` | Public key accepted by age. Cannot be combined with `-R`. |
-| `-R`, `--recipients-file PATH` | Recipients file (age `-R` format); `-` for stdin. Cannot be combined with `-r`. |
+| `-b`, `--branch NAME` | Local branch to use (default: `vault`). |
+| `-r`, `--recipient KEY` | Public key. Cannot be combined with `-R`. |
+| `-R`, `--recipients-file PATH` | Recipients file; `-` for stdin. Cannot be combined with `-r`. |
 | `-l`, `--label TEXT` | Optional label; omit, or one per key (`-r`) / per `-R` key line. |
 | `-n`, `--new-branch` | Create the named `-b` branch; fail if it already exists. |
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
@@ -304,7 +304,7 @@ Remove the profile named `NAME`. It must be empty and cannot be `default`.
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist, or pass `-n` to create it. |
+| `-b`, `--branch NAME` | Local branch to use (default: `vault`). |
 | `-n`, `--new-branch` | Create the named `-b` branch; fail if it already exists. |
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Cannot be combined with `-F`. |
@@ -321,7 +321,7 @@ List recipients for the selected profile. Default lines are `KEY` or `KEY  LABEL
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist. |
+| `-b`, `--branch NAME` | Local branch to use (default: `vault`). |
 | `-p`, `--profile NAME` | Profile (default: `default`). |
 | `--json` | Print recipients as canonical JSON. |
 | `-h`, `--help` | Show help. |
@@ -336,7 +336,7 @@ Add public keys from `-r` / `-R`. When the profile has files, decrypt each ciphe
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist, or pass `-n` to create it. |
+| `-b`, `--branch NAME` | Local branch to use (default: `vault`). |
 | `-p`, `--profile NAME` | Profile (default: `default`). |
 | `-r`, `--recipient KEY` | Public key to add. Cannot be combined with `-R`. |
 | `-R`, `--recipients-file PATH` | Recipients file; `-` for stdin. Cannot be combined with `-r`. |
@@ -358,7 +358,7 @@ Remove public keys from `-r` / `-R`. When the profile has files, decrypt each ci
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist, or pass `-n` to create it. |
+| `-b`, `--branch NAME` | Local branch to use (default: `vault`). |
 | `-p`, `--profile NAME` | Profile (default: `default`). |
 | `-r`, `--recipient KEY` | Public key to remove. Cannot be combined with `-R`. |
 | `-R`, `--recipients-file PATH` | Recipients file of keys to remove; `-` for stdin. Cannot be combined with `-r`. |
@@ -380,7 +380,7 @@ Encrypt files and append a commit to the selected branch. Unspecified files are 
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist, or pass `-n` to create it. |
+| `-b`, `--branch NAME` | Local branch to use (default: `vault`). |
 | `-p`, `--profile NAME` | Profile (default: `default`). |
 | `-a`, `--all` | Re-save all registered paths in the profile; cannot be combined with explicit paths. Does not discover new files. |
 | `-f`, `--force` | Allow tracked input files. Read working-tree content, not the staged version; leave the index and application history unchanged. |
@@ -400,7 +400,7 @@ List the original repository-relative paths saved in the selected profile.
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist. |
+| `-b`, `--branch NAME` | Local branch to use (default: `vault`). |
 | `-p`, `--profile NAME` | Profile (default: `default`). |
 | `-h`, `--help` | Show help. |
 
@@ -415,7 +415,7 @@ Decrypt files into the working tree. Without `-f`, existing files and tracked pa
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist. |
+| `-b`, `--branch NAME` | Local branch to use (default: `vault`). |
 | `-p`, `--profile NAME` | Profile (default: `default`). |
 | `-i`, `--identity PATH` | Identity file. Use `-i -` for stdin, or omit and use `vault.identity`. |
 | `-a`, `--all` | Restore all saved paths in the selected profile and revision; cannot be combined with explicit paths. |
@@ -433,7 +433,7 @@ Remove the specified paths from the current saved snapshot in one commit. Keep w
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist, or pass `-n` to create it. |
+| `-b`, `--branch NAME` | Local branch to use (default: `vault`). |
 | `-p`, `--profile NAME` | Profile (default: `default`). |
 | `-n`, `--new-branch` | Create the named `-b` branch; fail if it already exists. |
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
