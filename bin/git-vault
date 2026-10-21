@@ -126,8 +126,9 @@ git vault restore -p production -i /path/to/identity -- .env
 git vault restore -p production -i - -- .env < /path/to/identity
 ```
 
-Use `-i` (repeatable) or `vault.identity`. Prefer file input for noninteractive
-agent execution. Do not rely on implicit stdin without `-i -`.
+Use one `-i` or `vault.identity`. Multiple native age secrets can share one
+identity file. Prefer file input for noninteractive agent execution. Do not rely
+on implicit stdin without `-i -`.
 
 Restore writes plaintext files with mode `0600`. Do not print restored secrets;
 inspect names and command exit status when contents are unnecessary to the task.
@@ -164,8 +165,9 @@ git vault profiles remove production
 ```
 
 Use one `-r` or one `-R` for recipients (not both; do not repeat). Optional `-l`
-labels keys (zero, or one per `-r` key / per `-R` line). Use one `-i` (or
-`vault.identity`). Labels are metadata only; identify recipients by public key.
+labels keys (zero, or one per key; blank and comment lines in `-R` do not count).
+Use one `-i` (or `vault.identity`). Labels are metadata only; identify recipients
+by public key.
 
 `recipients add` and `recipients remove` decrypt every saved file in the profile,
 then re-encrypt for the updated public keys, and commit the list and ciphertext
@@ -378,7 +380,7 @@ def encrypt(data, keys):
     command = ["age", "--encrypt"]
     for key in keys:
         command.extend(["-r", key])
-    return run(command, data, private=True).stdout
+    return run(command, data).stdout
 
 
 def validate_recipients(pairs):
@@ -429,12 +431,19 @@ def recipients_from_cli(args, *, labels=True):
     return validate_recipients(pair_recipients(keys, label_args))
 
 
+def expand_identity_file(value):
+    try:
+        return Path(value).expanduser()
+    except RuntimeError:
+        raise VaultError(f"Cannot expand home directory in identity path: {value}") from None
+
+
 def expand_identity_path(value):
     if not isinstance(value, str) or value == "-" or "\0" in value or "\n" in value or "\r" in value:
         raise VaultError("Invalid vault.identity path.")
     if not (value.startswith("~") or os.path.isabs(value)):
         raise VaultError("vault.identity must be an absolute path or start with ~.")
-    return str(Path(value).expanduser())
+    return str(expand_identity_file(value))
 
 
 def vault_identity_path(repo):
@@ -480,8 +489,7 @@ def identities(repo, path):
                     stream.write(content)
                 yield [str(target)]
                 return
-            file = Path(path).expanduser()
-            file = file if file.is_absolute() else Path(path).absolute()
+            file = expand_identity_file(path).absolute()
             if not file.is_file():
                 raise VaultError(f"Identity file not found: {path}")
             yield [str(file)]
@@ -501,7 +509,10 @@ def decrypt(data, paths):
     command = ["age", "--decrypt"]
     for path in paths:
         command.extend(["-i", path])
-    return run(command, data, private=True).stdout
+    try:
+        return run(command, data, private=True).stdout
+    except VaultError as error:
+        raise VaultError(f"{error} Check the identity, ciphertext, and required age plugins.") from None
 
 
 @dataclass
@@ -960,18 +971,19 @@ Plaintext exclusion is your responsibility; ignore settings are never modified.
                 help="Use one identity file. Use -i - to read identity from stdin. Overrides vault.identity.",
             )
         if recipient:
-            p.add_argument(
+            recipient_input = p.add_mutually_exclusive_group(required=True)
+            recipient_input.add_argument(
                 "-r", "--recipient", action=StoreOnce, metavar="KEY", default=None,
-                help="Add one public key (age or SSH, as accepted by age). Mutually exclusive with -R.",
+                help="Specify one public key accepted by age; at most once. Mutually exclusive with -R.",
             )
-            p.add_argument(
+            recipient_input.add_argument(
                 "-R", "--recipients-file", action=StoreOnce, metavar="PATH", default=None,
                 help="Read public keys from one file (age -R format); use - for stdin. Mutually exclusive with -r.",
             )
         if label:
             p.add_argument(
                 "-l", "--label", action="append", metavar="TEXT",
-                help="Optional label; zero labels, or one per key from -r or from each -R line, in order.",
+                help="Optional label; zero labels, or one per key in input order. Blank and comment lines in -R do not count.",
             )
         return p
 

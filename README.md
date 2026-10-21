@@ -41,7 +41,17 @@ git vault version
 
 ### Manual installation
 
-Copy [`bin/git-vault`](bin/git-vault) to a directory on your PATH:
+From a checkout of this repository, copy [`bin/git-vault`](bin/git-vault) to a
+directory on your PATH and make it executable:
+
+```sh
+mkdir -p "$HOME/.local/bin"
+install -m 755 bin/git-vault "$HOME/.local/bin/git-vault"
+export PATH="$HOME/.local/bin:$PATH"
+git vault version
+```
+
+Add the PATH setting to your shell configuration to keep it across sessions.
 
 ## Quick start
 
@@ -147,6 +157,8 @@ git vault restore .env
 `-i -` is read once per operation into a temporary file and reused for every
 decrypt in that operation. Do not combine `-i -` with `-R -`. Multiple native age
 secrets belong in one identity file (age's multi-line format), not repeated `-i`.
+Only one identity path can be selected per operation; multiple SSH private key
+files cannot be supplied together.
 
 ### `vault.identity`
 
@@ -184,8 +196,9 @@ git vault init -R teammates.txt
 
 Optional `-l` / `--label` attaches a non-unique description when adding via
 `init`, `profiles add`, or `recipients add`. Provide zero labels, or one label per
-key across all `-r` / `-R` inputs in CLI order. Labels cannot be changed later
-except by removing and re-adding the recipient.
+key. Use exactly one `-r` or one `-R`; neither option can be repeated. For `-R`,
+labels follow the file's key order, excluding empty lines and comment lines.
+Labels cannot be changed later except by removing and re-adding the recipient.
 
 `recipients add` and `recipients remove` do not only edit the public key list.
 When the profile has saved files, git-vault must **decrypt every ciphertext with a
@@ -227,8 +240,8 @@ git vault save -m "Update secrets" -m "Use the new database" .env
 git vault save -F /path/to/message.txt .env
 ```
 
-Repeat `-m` to separate paragraphs. `-F` reads a UTF-8 file; `-F -` is not supported
-because `-F -` is not supported. Messages cannot be empty.
+Repeat `-m` to separate paragraphs. `-F` reads a UTF-8 file; reading the message
+from stdin with `-F -` is not supported. Messages cannot be empty.
 
 When omitted, messages are generated with a `git-vault:` prefix:
 
@@ -244,8 +257,9 @@ used. Set `user.name` and `user.email` if necessary.
 
 ## Working branches and pull requests
 
-`-b` always names the local branch to operate on. It must already exist unless
-`-n` explicitly requests a new branch. This prevents a typo from creating a branch.
+`-b` always names the local branch to operate on. Except for `init`, it must
+already exist unless `-n` explicitly requests a new branch. This prevents a typo
+from creating a branch.
 
 ```sh
 git fetch origin
@@ -313,14 +327,14 @@ generated.
 ### `init`
 
 ```sh
-git vault init [options] [-r KEY | -R PATH]... [-l TEXT ...]
+git vault init [options] (-r KEY | -R PATH) [-l TEXT]...
 ```
 
-Initialize an independent vault branch with a `default` profile. The branch must not already exist. This command creates the branch itself and does not accept `-n` or `-B`. At least one `-r` or `-R` is required.
+Initialize an independent vault branch with a `default` profile. The branch must not already exist. This command creates the branch itself and does not accept `-n` or `-B`. Exactly one `-r` or `-R` is required.
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
+| `-b`, `--branch NAME` | New local branch to create (default: `vault`). Must not already exist. |
 | `-r`, `--recipient KEY` | One public key accepted by age. Mutually exclusive with `-R`. |
 | `-R`, `--recipients-file PATH` | One recipients file (age `-R` format, multiple lines OK); `-` for stdin. Mutually exclusive with `-r`. |
 | `-l`, `--label TEXT` | Optional label; zero, or one per key (`-r`) / per `-R` line. |
@@ -344,10 +358,10 @@ List all profiles in the selected branch.
 ### `profiles add`
 
 ```sh
-git vault profiles add [options] NAME [-r KEY | -R PATH]... [-l TEXT ...]
+git vault profiles add [options] NAME (-r KEY | -R PATH) [-l TEXT]...
 ```
 
-Create the profile named `NAME` with its own recipients and no files. The profile must not already exist. Profile names begin with an ASCII letter or digit and contain only letters, digits, `.`, `_`, and `-`. At least one `-r` or `-R` is required.
+Create the profile named `NAME` with its own recipients and no files. The profile must not already exist. Profile names begin with an ASCII letter or digit and contain only letters, digits, `.`, `_`, and `-`. Exactly one `-r` or `-R` is required.
 
 | Option | Purpose |
 | --- | --- |
@@ -391,12 +405,13 @@ List recipients for the selected profile. Default lines are `KEY` or `KEY  LABEL
 | --- | --- |
 | `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
 | `-p`, `--profile NAME` | Target profile (default: `default`). |
+| `--json` | Print recipients as canonical JSON. |
 | `-h`, `--help` | Show help. |
 
 ### `recipients add`
 
 ```sh
-git vault recipients add [options] [-r KEY | -R PATH]... [-l TEXT ...]
+git vault recipients add [options] (-r KEY | -R PATH) [-l TEXT]...
 ```
 
 Add public keys from `-r` / `-R`. When the profile has files, decrypt each ciphertext and re-encrypt it for the updated public keys in one commit. Existing public keys are rejected. A private identity is needed for that decrypt step unless the profile is empty.
@@ -418,7 +433,7 @@ Add public keys from `-r` / `-R`. When the profile has files, decrypt each ciphe
 ### `recipients remove`
 
 ```sh
-git vault recipients remove [options] [-r KEY | -R PATH]...
+git vault recipients remove [options] (-r KEY | -R PATH)
 ```
 
 Remove public keys from `-r` / `-R`. When the profile has files, decrypt each ciphertext and re-encrypt it for the remaining public keys in one commit. Unknown keys and removal of the last public key are rejected. A private identity is needed for that decrypt step unless the profile is empty. Past commits are unchanged.
@@ -604,10 +619,9 @@ historical restore, linked worktrees, remote divergence, failure atomicity, and
 agent skill output and installation.
 
 There is no test framework or Python package dependency. Bash, Git, age, age-keygen,
-and Python (for git-vault itself) are required. A small Python helper drives the
-real CLI through a terminal for the interactive-input test. If PTY allocation is
-unavailable, that check is explicitly reported as skipped. Tests never import
-git-vault's implementation.
+ssh-keygen, and Python (for git-vault itself) are required. The stdin identity test restores
+multiple files in one operation to verify that the identity is read once and
+reused. Tests never import git-vault's implementation.
 
 ## Author
 

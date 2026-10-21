@@ -4,7 +4,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
 sorted_lines() {
     printf '%s\n' "$@" | sort
 }
-sorted_lines "$RECIPIENT1" "$RECIPIENT2" >"$TEST_ROOT/init-recipients.txt"
+printf '%s\n' "$RECIPIENT1" "$RECIPIENT2" >"$TEST_ROOT/init-recipients.txt"
 git vault init -R "$TEST_ROOT/init-recipients.txt" -l 'Alice laptop' -l 'Bob (staging)'
 sorted_lines "$RECIPIENT1  Alice laptop" "$RECIPIENT2  Bob (staging)" >"$TEST_ROOT/expected"
 git vault recipients list >"$TEST_ROOT/list"
