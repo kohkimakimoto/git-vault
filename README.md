@@ -107,9 +107,8 @@ git vault profiles remove production
 
 Identity is required only when decrypting (restore, or recipients add/remove when the profile has files). Resolve it as follows:
 
-1. `-i` / `--identity PATH`. Use `-i -` to read an identity from stdin (same meaning as age). Overrides `vault.identity`.
+1. `-i` / `--identity PATH`. Use `-i -` to read an identity from stdin. Overrides `vault.identity`.
 2. Otherwise `git config vault.identity` (see below).
-3. Otherwise the command fails. There is no implicit stdin read and no prompt.
 
 ```sh
 git vault restore -i /path/to/identity .env
@@ -123,14 +122,22 @@ git vault restore .env
 
 ### `vault.identity`
 
-Set a default identity file path in Git config (not the key material):
+Set a default identity file path with `git config` (the path to the file, not the key material):
+
+```sh
+# User-wide default
+git config --global vault.identity ~/.config/age/key.txt
+
+# Repository-local default
+git config vault.identity ~/.config/age/key.txt
+```
+
+These commands write an entry like the following into the corresponding Git config file:
 
 ```ini
 [vault]
 	identity = ~/.config/age/key.txt
 ```
-
-Each selected scope defines a single path. Paths must be absolute or start with `~`. git-vault uses the highest Git config scope that defines the key (`command` → `worktree` → `local` → `global` → `system`), including `include` / `includeIf`, and does not fall back to stdin if the configured path is missing.
 
 ## Recipients
 
