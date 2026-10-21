@@ -25,6 +25,8 @@ git-vault is an external Git subcommand: Git allows an executable named `git-xxx
 brew install kohkimakimoto/tap/git-vault
 ```
 
+This also installs [age](https://github.com/FiloSottile/age) as a Homebrew dependency.
+
 ### Manual installation
 
 Place [`bin/git-vault`](bin/git-vault) somewhere on your `PATH` and make it executable.
@@ -34,7 +36,10 @@ Place [`bin/git-vault`](bin/git-vault) somewhere on your `PATH` and make it exec
 Create an age identity outside the repository, or use an existing one:
 
 ```sh
+# Create a directory for the identity file
 mkdir -p "$HOME/.config/age"
+
+# Generate an age identity (private key file + printed public key)
 age-keygen -o "$HOME/.config/age/key.txt"
 ```
 
@@ -51,13 +56,20 @@ The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` com
 Inside your application repository:
 
 ```sh
+# Create the orphan vault branch with the given public key
 git vault init -r age...
+
+# Encrypt .env and commit it to the vault branch
 git vault save .env
+
+# List paths saved in the vault
 git vault list
+
+# Publish the vault branch to the remote
 git push origin vault
 ```
 
-`init` creates an independent `vault` branch with a `default` profile. Every update adds a commit to that branch. Your current checkout, application branch, and index are left alone. There is no need to switch to the vault branch.
+`init` creates an orphan `vault` branch whose tree holds encrypted files and the public keys used for encryption. Every update adds a commit to that branch. Your current checkout, application branch, and index are left alone. There is no need to switch to the vault branch.
 
 `save` keeps the original plaintext file. **You are responsible for excluding plaintext from Git**, for example with your own `.gitignore`. git-vault does not inspect or modify ignore settings.
 
@@ -75,13 +87,22 @@ git vault restore -f -i "$HOME/.config/age/key.txt" .env
 
 ## Profiles
 
-Profiles group files and recipients in the same vault branch:
+Profiles group files and recipients in the same vault branch. `init` creates a `default` profile implicitly.
 
 ```sh
+# Create a production profile with its own public key
 git vault profiles add production -r age...
+
+# Encrypt .env into the production profile
 git vault save -p production .env
+
+# List paths saved in the production profile
 git vault list -p production
+
+# List all profiles on the vault branch
 git vault profiles list
+
+# Restore .env from production, overwriting if it already exists
 git vault restore -p production -f -i /path/to/identity .env
 ```
 
@@ -111,10 +132,19 @@ Identity is required only when decrypting (restore, or recipients add/remove whe
 2. Otherwise `git config vault.identity` (see below).
 
 ```sh
+# Restore with an explicit identity file
 git vault restore -i /path/to/identity .env
+
+# Read the identity from stdin via redirection
 git vault restore -i - .env < /path/to/identity
+
+# Same via a pipe; -a restores every saved path in the profile
 cat /path/to/identity | git vault restore -a -i -
+
+# Set a user-wide default identity path
 git config --global vault.identity ~/.config/age/key.txt
+
+# Restore using vault.identity (no -i)
 git vault restore .env
 ```
 
@@ -146,11 +176,22 @@ A recipient is who may use a profile's secrets (a person, bot, or role). Each re
 Each profile stores recipients as JSON at `<profile>/recipients`. CLI input uses `-r` / `-R`:
 
 ```sh
+# List recipients in the production profile
 git vault recipients list -p production
+
+# Same list as canonical JSON
 git vault recipients list -p production --json
+
+# Add a public key with a label (re-encrypts saved files when needed)
 git vault recipients add -p production -i /path/to/identity -l "deploy bot" -r age...
+
+# Add public keys from a recipients file
 git vault recipients add -p production -i /path/to/identity -R ~/.ssh/id_ed25519.pub
+
+# Remove a public key (re-encrypts saved files when needed)
 git vault recipients remove -p production -i /path/to/identity -r age...
+
+# Initialize a vault from a recipients file instead of -r
 git vault init -R teammates.txt
 ```
 
@@ -178,8 +219,13 @@ Removing a public key does not revoke access to historical ciphertext.
 All operations that create commits accept `-m` or `-F`:
 
 ```sh
+# Set the commit message with -m
 git vault save -m "Rotate database credentials" .env
+
+# Repeat -m for separate paragraphs
 git vault save -m "Update secrets" -m "Use the new database" .env
+
+# Read the commit message from a file
 git vault save -F /path/to/message.txt .env
 ```
 
@@ -200,14 +246,16 @@ Explicit messages are used without a prefix or format marker. Commit messages ar
 `-b` always names the local branch to operate on. `init` creates that branch and rejects an existing name. Other commands require an existing branch, unless the command supports `-n` and you pass it to create a new one. This prevents a typo from creating a branch.
 
 ```sh
+# Update remote-tracking branches (including origin/vault)
 git fetch origin
 
-# Create a working branch from the fetched vault branch and save a change.
+# Create a working branch from the fetched vault tip and save a change
 git vault save -p production -b vault-update-db -n -B origin/vault .env
 
-# Add another commit to the existing working branch.
+# Add another commit to the existing working branch
 git vault save -p production -b vault-update-db credentials.json
 
+# Publish the working branch for a pull request
 git push origin vault-update-db
 ```
 
@@ -222,8 +270,13 @@ Git cannot have both `vault` and `vault/update-db` branches. Use names such as `
 Remote operations use ordinary Git commands; git-vault never fetches or pushes. After cloning the application branch, create a local vault branch from the remote:
 
 ```sh
+# Fetch remote refs after cloning the application branch
 git fetch origin
+
+# Create a local vault branch tracking the remote vault
 git branch --track vault origin/vault
+
+# Restore every saved file into the working tree
 git vault restore -a -i /path/to/identity
 ```
 
@@ -249,7 +302,7 @@ Paths are relative to the current directory; `-a` uses stored repository-relativ
 git vault init [options] (-r KEY | -R PATH) [-l TEXT]...
 ```
 
-Initialize an independent vault branch with a `default` profile. The branch must not already exist. This command creates the branch itself and does not accept `-n` or `-B`. Recipients are required via `-r` or `-R`.
+Create a local orphan vault branch (default name `vault`) with a `default` profile. The branch must not already exist. Its tree is separate from application history and holds encrypted files plus the public keys used for encryption. This command creates the branch itself and does not accept `-n` or `-B`. Your checkout, application branch, and index are left alone. Recipients are required via `-r` or `-R`.
 
 | Option | Purpose |
 | --- | --- |
@@ -456,8 +509,13 @@ Print the version hardcoded in the script, such as `0.8.0`. No repository or age
 ### `skill`
 
 ```sh
+# Print the skill to stdout
 git vault skill
+
+# Install it at the default path (.agents/skills/git-vault/SKILL.md)
 git vault skill -o
+
+# Install it at a custom path
 git vault skill -o .claude/skills/git-vault/SKILL.md
 ```
 
