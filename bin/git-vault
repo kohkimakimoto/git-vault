@@ -116,8 +116,9 @@ The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...`
 comment is the matching public key. Use that public key with `-r` / recipients.
 Use the identity file with `-i PATH` to decrypt. To read an identity from stdin,
 use `-i -` (like age). Optionally set `git config vault.identity /path/to/key`
-as a default when `-i` is omitted. Never read, print, or pass the private key in
-conversation or command arguments.
+as a default when `-i` is omitted. Multiple native age secrets belong in one
+identity file. Do not combine `-i -` with `-R -`. Never read, print, or pass the
+private key in conversation or command arguments.
 
 ## Restore files
 
@@ -126,12 +127,11 @@ git vault restore -p production -i /path/to/identity -- .env
 git vault restore -p production -i - -- .env < /path/to/identity
 ```
 
-Use one `-i` or `vault.identity`. Multiple native age secrets can share one
-identity file. Prefer file input for noninteractive agent execution. Do not rely
-on implicit stdin without `-i -`.
+Select the identity with `-i` or `vault.identity`. Prefer file input for
+noninteractive agent execution. Do not rely on implicit stdin without `-i -`.
 
 Restore writes plaintext files with mode `0600`. Do not print restored secrets;
-inspect names and command exit status when contents are unnecessary to the task.
+inspect names and command success when contents are unnecessary to the task.
 `restore -a` restores the whole profile. `--revision REV` restores a historical
 commit reachable from the selected branch.
 
@@ -164,16 +164,16 @@ git vault remove -p production -- .env
 git vault profiles remove production
 ```
 
-Use one `-r` or one `-R` for recipients (not both; do not repeat). Optional `-l`
-labels keys (zero, or one per key; blank and comment lines in `-R` do not count).
-Use one `-i` (or `vault.identity`). Labels are metadata only; identify recipients
-by public key.
+Provide recipients with `-r` or `-R` (not both). Optional `-l` labels keys (omit,
+or one label per key; blank and comment lines in `-R` do not count). Select the
+identity with `-i` or `vault.identity`. Labels are metadata only; identify
+recipients by public key.
 
 `recipients add` and `recipients remove` decrypt every saved file in the profile,
 then re-encrypt for the updated public keys, and commit the list and ciphertext
 together. A private identity is required for that decrypt step unless the profile
 is empty; public keys alone cannot rewrite age ciphertext. `restore` also needs a
-private identity. Prefer including one master public key in every profile, and
+private identity. Prefer including a master public key in every profile, and
 treat its private key as high privilege. Failure leaves the branch unchanged. The
 last public key cannot be removed. Profiles can be removed only when empty, and
 `default` cannot be removed. These updates also support `-b`, `-n`, and `-B`
@@ -198,10 +198,9 @@ file or recipient does not revoke access to past versions. File names, recipient
 recipient labels, profile names, sizes, and commit metadata are public within the
 repository.
 
-On failure, inspect stderr without exposing keys or plaintext. Exit codes are
-0 for success, 1 for operation failure, 2 for invalid arguments, and 3 for a
-concurrent ref update or creation conflict. Retry from a refreshed base only
-after understanding the failure; do not overwrite someone else's update.
+On failure, inspect stderr without exposing keys or plaintext. Retry from a
+refreshed base only after understanding the failure; do not overwrite someone
+else's update.
 """
 
 
@@ -813,6 +812,8 @@ def execute(args):
         parent = repo.commit_oid(args.base or "vault")
     else:
         if not old_oid:
+            if args.operation in ("list", "restore", "profiles-list", "recipients-list"):
+                raise VaultError(f"Branch does not exist: {branch}.")
             raise VaultError(f"Branch does not exist: {branch}. Use init or --new-branch.")
         parent = repo.commit_oid(ref)
     source = parent
@@ -910,19 +911,20 @@ def execute(args):
 
 
 def parser_for_cli():
-    epilog = """Requires Python 3.11+, git, and age. No Python packages are needed.
+    requirements = (
+        "Requires Python 3.11+, git, and age. No Python packages are needed.\n"
+        "Plaintext exclusion is your responsibility; ignore settings are never modified."
+    )
+    root_epilog = requirements + """
 
 Examples:
   git vault init -r age...
   git vault save -p production -m 'Rotate credentials' -- .env
   git vault restore -a -i /path/to/identity
   git vault save -b vault-update -n -B origin/vault -- .env
-
-Exit codes: 0 success; 1 operation failed; 2 invalid arguments; 3 ref conflict.
-Plaintext exclusion is your responsibility; ignore settings are never modified.
 """
     parser = argparse.ArgumentParser(
-        prog="git vault", description=__doc__, epilog=epilog,
+        prog="git vault", description=__doc__, epilog=root_epilog,
         formatter_class=argparse.RawDescriptionHelpFormatter, allow_abbrev=False,
     )
     commands = parser.add_subparsers(dest="command", required=True)
@@ -945,65 +947,85 @@ Plaintext exclusion is your responsibility; ignore settings are never modified.
 
     def leaf(
         group, name, operation, description, profile=False, update=False,
-        create=False, identity=False, recipient=False, label=False,
+        create=False, identity=False, recipient=False, label=False, *,
+        branch_help="Local branch to use (default: vault).",
     ):
         p = group.add_parser(
-            name, description=description, help=description, epilog=epilog,
+            name, description=description, help=description, epilog=requirements,
             formatter_class=argparse.RawDescriptionHelpFormatter, allow_abbrev=False,
         )
         p.set_defaults(operation=operation)
-        p.add_argument("-b", "--branch", metavar="NAME", help="Select a local branch (default: vault).")
+        p.add_argument("-b", "--branch", metavar="NAME", help=branch_help)
         if profile:
-            p.add_argument("-p", "--profile", default="default", metavar="NAME", help="Select a profile (default: default).")
+            p.add_argument("-p", "--profile", default="default", metavar="NAME", help="Profile to use (default: default).")
         if update:
             messages = p.add_mutually_exclusive_group()
             messages.add_argument(
                 "-m", "--message", action="append", metavar="TEXT",
-                help="Set the commit message; repeat for paragraphs. Do not include secrets.",
+                help="Commit message; repeat for paragraphs. Do not include secrets.",
             )
-            messages.add_argument("-F", "--message-file", metavar="PATH", help="Read a UTF-8 commit message from a file (not stdin).")
+            messages.add_argument(
+                "-F", "--message-file", metavar="PATH",
+                help="Read a UTF-8 commit message from a file (not stdin).",
+            )
         if create:
-            p.add_argument("-n", "--new-branch", action="store_true", help="Create the explicitly named -b branch; fail if it exists.")
-            p.add_argument("-B", "--base", metavar="REF", help="Set the creation base (default: vault); requires -n.")
+            p.add_argument(
+                "-n", "--new-branch", action="store_true",
+                help="Create the named -b branch; fail if it already exists.",
+            )
+            p.add_argument("-B", "--base", metavar="REF", help="Creation base (default: vault); requires -n.")
         if identity:
             p.add_argument(
                 "-i", "--identity", action=StoreOnce, metavar="PATH", default=None,
-                help="Use one identity file. Use -i - to read identity from stdin. Overrides vault.identity.",
+                help="Identity file. Use -i - for stdin. Overrides vault.identity.",
             )
         if recipient:
             recipient_input = p.add_mutually_exclusive_group(required=True)
             recipient_input.add_argument(
                 "-r", "--recipient", action=StoreOnce, metavar="KEY", default=None,
-                help="Specify one public key accepted by age; at most once. Mutually exclusive with -R.",
+                help="Public key accepted by age. Cannot be combined with -R.",
             )
             recipient_input.add_argument(
                 "-R", "--recipients-file", action=StoreOnce, metavar="PATH", default=None,
-                help="Read public keys from one file (age -R format); use - for stdin. Mutually exclusive with -r.",
+                help="Recipients file (age -R format); - for stdin. Cannot be combined with -r.",
             )
         if label:
             p.add_argument(
                 "-l", "--label", action="append", metavar="TEXT",
-                help="Optional label; zero labels, or one per key in input order. Blank and comment lines in -R do not count.",
+                help="Optional label; omit, or one per key in input order. Blank and comment lines in -R do not count.",
             )
         return p
 
-    leaf(commands, "init", "init", "Initialize an independent vault branch.", update=True, recipient=True, label=True)
+    leaf(
+        commands, "init", "init", "Initialize an independent vault branch.",
+        update=True, recipient=True, label=True,
+        branch_help="Local branch to create (default: vault).",
+    )
     for name in ("profiles", "recipients"):
         group_parser = commands.add_parser(name, help=f"Manage {name}.")
         group = group_parser.add_subparsers(dest="action", required=True)
         listed = leaf(group, "list", name + "-list", f"List {name}.", profile=name == "recipients")
         if name == "recipients":
             listed.add_argument("--json", action="store_true", help="Print recipients as canonical JSON.")
+        profile_actions = {
+            "add": "Create a profile with recipients and no files.",
+            "remove": "Remove an empty non-default profile.",
+        }
+        recipient_actions = {
+            "add": "Add recipients; re-encrypt saved files when needed.",
+            "remove": "Remove recipients; re-encrypt saved files when needed.",
+        }
         for action in ("add", "remove"):
+            description = (profile_actions if name == "profiles" else recipient_actions)[action]
             p = leaf(
-                group, action, name + "-" + action, f"{action.capitalize()} {name}.",
+                group, action, name + "-" + action, description,
                 profile=name == "recipients", update=True, create=True,
                 identity=name == "recipients",
                 recipient=(name == "profiles" and action == "add") or (name == "recipients"),
                 label=(name == "profiles" and action == "add") or (name == "recipients" and action == "add"),
             )
             if name == "profiles":
-                p.add_argument("name", metavar="NAME", help="Name the profile.")
+                p.add_argument("name", metavar="NAME", help="Profile name.")
     leaf(commands, "list", "list", "List saved paths in a profile.", profile=True)
     for operation in ("save", "restore", "remove"):
         p = leaf(
@@ -1016,11 +1038,15 @@ Plaintext exclusion is your responsibility; ignore settings are never modified.
             profile=True, update=operation != "restore", create=operation != "restore", identity=operation == "restore",
         )
         if operation in ("save", "restore"):
-            p.add_argument("-a", "--all", action="store_true", help="Use all saved paths in this profile; excludes explicit paths.")
+            p.add_argument(
+                "-a", "--all", action="store_true",
+                help="Use all saved paths in this profile; cannot be combined with explicit paths.",
+            )
             p.add_argument(
                 "-f", "--force", action="store_true",
                 help=(
-                    "Allow tracked input files. Existing plaintext and Git history are not removed."
+                    "Allow tracked input files. Read working-tree content, not the staged version; "
+                    "leave the index and application history unchanged."
                     if operation == "save" else
                     "Overwrite existing or tracked files, including uncommitted changes. The index is unchanged."
                 ),
@@ -1030,8 +1056,10 @@ Plaintext exclusion is your responsibility; ignore settings are never modified.
         if operation == "restore":
             p.add_argument("--revision", metavar="REV", help="Restore from a reachable historical commit (default: branch tip).")
         p.add_argument(
-            "paths", nargs="*", metavar="PATH",
-            help="Use paths relative to the current directory; use -- before leading hyphens.",
+            "paths",
+            nargs="+" if operation == "remove" else "*",
+            metavar="PATH",
+            help="Paths relative to the current directory; use -- before leading hyphens.",
         )
     return parser
 

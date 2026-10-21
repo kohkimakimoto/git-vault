@@ -141,9 +141,9 @@ If any registered source file is missing, the entire save fails.
 Identity is required only when decrypting (restore, or recipients add/remove when
 the profile has files). Resolve it as follows:
 
-1. `-i` / `--identity PATH` (at most once). Use `-i -` to read an identity from
-   stdin (same meaning as age). Overrides `vault.identity`.
-2. Otherwise `git config vault.identity` (a single path; see below).
+1. `-i` / `--identity PATH`. Use `-i -` to read an identity from stdin (same
+   meaning as age). Overrides `vault.identity`.
+2. Otherwise `git config vault.identity` (see below).
 3. Otherwise the command fails. There is no implicit stdin read and no prompt.
 
 ```sh
@@ -156,22 +156,21 @@ git vault restore .env
 
 `-i -` is read once per operation into a temporary file and reused for every
 decrypt in that operation. Do not combine `-i -` with `-R -`. Multiple native age
-secrets belong in one identity file (age's multi-line format), not repeated `-i`.
-Only one identity path can be selected per operation; multiple SSH private key
-files cannot be supplied together.
+secrets belong in one identity file (age's multi-line format). Multiple SSH
+private key files cannot be supplied in a single operation.
 
 ### `vault.identity`
 
-Set a single default identity file path in Git config (not the key material):
+Set a default identity file path in Git config (not the key material):
 
 ```ini
 [vault]
 	identity = ~/.config/age/key.txt
 ```
 
-Exactly one path per selected scope. Paths must be absolute or start with `~`.
-git-vault uses the highest Git config scope that defines the key (`command` →
-`worktree` → `local` → `global` → `system`), including `include` / `includeIf`,
+Each selected scope defines a single path. Paths must be absolute or start with
+`~`. git-vault uses the highest Git config scope that defines the key (`command`
+→ `worktree` → `local` → `global` → `system`), including `include` / `includeIf`,
 and does not fall back to stdin if the configured path is missing.
 
 ## Recipients
@@ -194,11 +193,12 @@ git vault recipients remove -p production -i /path/to/identity -r age...
 git vault init -R teammates.txt
 ```
 
-Optional `-l` / `--label` attaches a non-unique description when adding via
-`init`, `profiles add`, or `recipients add`. Provide zero labels, or one label per
-key. Use exactly one `-r` or one `-R`; neither option can be repeated. For `-R`,
-labels follow the file's key order, excluding empty lines and comment lines.
-Labels cannot be changed later except by removing and re-adding the recipient.
+Provide recipients with `-r KEY` or `-R PATH` (age-style; the two cannot be
+combined). `-R` may list several keys, one per line. Optional `-l` / `--label`
+attaches a non-unique description when adding via `init`, `profiles add`, or
+`recipients add`: omit labels, or pass one label per key. For `-R`, labels follow
+the file's key order, excluding empty lines and comment lines. Labels cannot be
+changed later except by removing and re-adding the recipient.
 
 `recipients add` and `recipients remove` do not only edit the public key list.
 When the profile has saved files, git-vault must **decrypt every ciphertext with a
@@ -257,8 +257,9 @@ used. Set `user.name` and `user.email` if necessary.
 
 ## Working branches and pull requests
 
-`-b` always names the local branch to operate on. Except for `init`, it must
-already exist unless `-n` explicitly requests a new branch. This prevents a typo
+`-b` always names the local branch to operate on. `init` creates that branch and
+rejects an existing name. Other commands require an existing branch, unless the
+command supports `-n` and you pass it to create a new one. This prevents a typo
 from creating a branch.
 
 ```sh
@@ -330,16 +331,16 @@ generated.
 git vault init [options] (-r KEY | -R PATH) [-l TEXT]...
 ```
 
-Initialize an independent vault branch with a `default` profile. The branch must not already exist. This command creates the branch itself and does not accept `-n` or `-B`. Exactly one `-r` or `-R` is required.
+Initialize an independent vault branch with a `default` profile. The branch must not already exist. This command creates the branch itself and does not accept `-n` or `-B`. Recipients are required via `-r` or `-R`.
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | New local branch to create (default: `vault`). Must not already exist. |
-| `-r`, `--recipient KEY` | One public key accepted by age. Mutually exclusive with `-R`. |
-| `-R`, `--recipients-file PATH` | One recipients file (age `-R` format, multiple lines OK); `-` for stdin. Mutually exclusive with `-r`. |
-| `-l`, `--label TEXT` | Optional label; zero, or one per key (`-r`) / per `-R` line. |
-| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
-| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
+| `-b`, `--branch NAME` | Local branch to create (default: `vault`). Must not already exist. |
+| `-r`, `--recipient KEY` | Public key accepted by age. Cannot be combined with `-R`. |
+| `-R`, `--recipients-file PATH` | Recipients file (age `-R` format); `-` for stdin. Cannot be combined with `-r`. |
+| `-l`, `--label TEXT` | Optional label; omit, or one per key (`-r`) / per `-R` key line. |
+| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Cannot be combined with `-F`. |
+| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Cannot be combined with `-m`. |
 | `-h`, `--help` | Show help. |
 
 ### `profiles list`
@@ -352,7 +353,7 @@ List all profiles in the selected branch.
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
+| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist. |
 | `-h`, `--help` | Show help. |
 
 ### `profiles add`
@@ -361,18 +362,18 @@ List all profiles in the selected branch.
 git vault profiles add [options] NAME (-r KEY | -R PATH) [-l TEXT]...
 ```
 
-Create the profile named `NAME` with its own recipients and no files. The profile must not already exist. Profile names begin with an ASCII letter or digit and contain only letters, digits, `.`, `_`, and `-`. Exactly one `-r` or `-R` is required.
+Create the profile named `NAME` with its own recipients and no files. The profile must not already exist. Profile names begin with an ASCII letter or digit and contain only letters, digits, `.`, `_`, and `-`. Recipients are required via `-r` or `-R`.
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
-| `-r`, `--recipient KEY` | One public key accepted by age. Mutually exclusive with `-R`. |
-| `-R`, `--recipients-file PATH` | One recipients file (age `-R` format, multiple lines OK); `-` for stdin. Mutually exclusive with `-r`. |
-| `-l`, `--label TEXT` | Optional label; zero, or one per key (`-r`) / per `-R` line. |
-| `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
+| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist, or pass `-n` to create it. |
+| `-r`, `--recipient KEY` | Public key accepted by age. Cannot be combined with `-R`. |
+| `-R`, `--recipients-file PATH` | Recipients file (age `-R` format); `-` for stdin. Cannot be combined with `-r`. |
+| `-l`, `--label TEXT` | Optional label; omit, or one per key (`-r`) / per `-R` key line. |
+| `-n`, `--new-branch` | Create the named `-b` branch; fail if it already exists. |
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
-| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
-| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
+| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Cannot be combined with `-F`. |
+| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Cannot be combined with `-m`. |
 | `-h`, `--help` | Show help. |
 
 ### `profiles remove`
@@ -385,11 +386,11 @@ Remove the profile named `NAME`. It must be empty and cannot be `default`.
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
-| `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
+| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist, or pass `-n` to create it. |
+| `-n`, `--new-branch` | Create the named `-b` branch; fail if it already exists. |
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
-| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
-| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
+| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Cannot be combined with `-F`. |
+| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Cannot be combined with `-m`. |
 | `-h`, `--help` | Show help. |
 
 ### `recipients list`
@@ -403,8 +404,8 @@ List recipients for the selected profile. Default lines are `KEY` or `KEY  LABEL
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
-| `-p`, `--profile NAME` | Target profile (default: `default`). |
+| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist. |
+| `-p`, `--profile NAME` | Profile (default: `default`). |
 | `--json` | Print recipients as canonical JSON. |
 | `-h`, `--help` | Show help. |
 
@@ -418,16 +419,16 @@ Add public keys from `-r` / `-R`. When the profile has files, decrypt each ciphe
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
-| `-p`, `--profile NAME` | Target profile (default: `default`). |
-| `-r`, `--recipient KEY` | One public key to add. Mutually exclusive with `-R`. |
-| `-R`, `--recipients-file PATH` | One recipients file; `-` for stdin. Mutually exclusive with `-r`. |
-| `-i`, `--identity PATH` | One identity for re-encryption. Use `-i -` for stdin, or `vault.identity`. Not needed when the profile has no files. |
-| `-l`, `--label TEXT` | Optional label; zero, or one per key / per `-R` line. |
-| `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
+| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist, or pass `-n` to create it. |
+| `-p`, `--profile NAME` | Profile (default: `default`). |
+| `-r`, `--recipient KEY` | Public key to add. Cannot be combined with `-R`. |
+| `-R`, `--recipients-file PATH` | Recipients file; `-` for stdin. Cannot be combined with `-r`. |
+| `-i`, `--identity PATH` | Identity for re-encryption. Use `-i -` for stdin, or `vault.identity`. Not needed when the profile has no files. |
+| `-l`, `--label TEXT` | Optional label; omit, or one per key / per `-R` key line. |
+| `-n`, `--new-branch` | Create the named `-b` branch; fail if it already exists. |
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
-| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
-| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
+| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Cannot be combined with `-F`. |
+| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Cannot be combined with `-m`. |
 | `-h`, `--help` | Show help. |
 
 ### `recipients remove`
@@ -440,15 +441,15 @@ Remove public keys from `-r` / `-R`. When the profile has files, decrypt each ci
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
-| `-p`, `--profile NAME` | Target profile (default: `default`). |
-| `-r`, `--recipient KEY` | One public key to remove. Mutually exclusive with `-R`. |
-| `-R`, `--recipients-file PATH` | One recipients file of keys to remove; `-` for stdin. Mutually exclusive with `-r`. |
-| `-i`, `--identity PATH` | One identity for re-encryption. Use `-i -` for stdin, or `vault.identity`. Not needed when the profile has no files. |
-| `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
+| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist, or pass `-n` to create it. |
+| `-p`, `--profile NAME` | Profile (default: `default`). |
+| `-r`, `--recipient KEY` | Public key to remove. Cannot be combined with `-R`. |
+| `-R`, `--recipients-file PATH` | Recipients file of keys to remove; `-` for stdin. Cannot be combined with `-r`. |
+| `-i`, `--identity PATH` | Identity for re-encryption. Use `-i -` for stdin, or `vault.identity`. Not needed when the profile has no files. |
+| `-n`, `--new-branch` | Create the named `-b` branch; fail if it already exists. |
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
-| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
-| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
+| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Cannot be combined with `-F`. |
+| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Cannot be combined with `-m`. |
 | `-h`, `--help` | Show help. |
 
 ### `save`
@@ -462,14 +463,14 @@ Encrypt files and append a commit to the selected branch. Unspecified files are 
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
-| `-p`, `--profile NAME` | Target profile (default: `default`). |
-| `-a`, `--all` | Re-save all registered paths in the profile; mutually exclusive with explicit paths. Does not discover new files. |
+| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist, or pass `-n` to create it. |
+| `-p`, `--profile NAME` | Profile (default: `default`). |
+| `-a`, `--all` | Re-save all registered paths in the profile; cannot be combined with explicit paths. Does not discover new files. |
 | `-f`, `--force` | Allow tracked input files. Read working-tree content, not the staged version; leave the index and application history unchanged. |
-| `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
+| `-n`, `--new-branch` | Create the named `-b` branch; fail if it already exists. |
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
-| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
-| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
+| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Cannot be combined with `-F`. |
+| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Cannot be combined with `-m`. |
 | `-h`, `--help` | Show help. |
 
 ### `list`
@@ -482,8 +483,8 @@ List the original repository-relative paths saved in the selected profile.
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
-| `-p`, `--profile NAME` | Target profile (default: `default`). |
+| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist. |
+| `-p`, `--profile NAME` | Profile (default: `default`). |
 | `-h`, `--help` | Show help. |
 
 ### `restore`
@@ -497,10 +498,10 @@ Decrypt files into the working tree. Without `-f`, existing files and tracked pa
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
-| `-p`, `--profile NAME` | Target profile (default: `default`). |
-| `-i`, `--identity PATH` | One identity file. Use `-i -` for stdin, or omit and use `vault.identity`. |
-| `-a`, `--all` | Restore all saved paths in the selected profile and revision; mutually exclusive with explicit paths. |
+| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist. |
+| `-p`, `--profile NAME` | Profile (default: `default`). |
+| `-i`, `--identity PATH` | Identity file. Use `-i -` for stdin, or omit and use `vault.identity`. |
+| `-a`, `--all` | Restore all saved paths in the selected profile and revision; cannot be combined with explicit paths. |
 | `-f`, `--force` | Overwrite existing or tracked files, including uncommitted working-tree changes; leave the index unchanged. |
 | `--revision REV` | Restore from a commit reachable from the target branch (default: branch tip). |
 | `-h`, `--help` | Show help. |
@@ -515,12 +516,12 @@ Remove the specified paths from the current saved snapshot in one commit. Keep w
 
 | Option | Purpose |
 | --- | --- |
-| `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
-| `-p`, `--profile NAME` | Target profile (default: `default`). |
-| `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
+| `-b`, `--branch NAME` | Local branch (default: `vault`). Must already exist, or pass `-n` to create it. |
+| `-p`, `--profile NAME` | Profile (default: `default`). |
+| `-n`, `--new-branch` | Create the named `-b` branch; fail if it already exists. |
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
-| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
-| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
+| `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Cannot be combined with `-F`. |
+| `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Cannot be combined with `-m`. |
 | `-h`, `--help` | Show help. |
 
 ### `version`
@@ -561,11 +562,6 @@ symlink output files are rejected even with `-f`.
 | `-f`, `--force` | Overwrite an existing output file; requires `-o`. |
 | `-h`, `--help` | Show help. |
 
-### Exit codes
-
-`0` success, `1` operation failure, `2` invalid arguments, `3` ref update or creation
-conflict.
-
 ## Storage and scope
 
 Each profile occupies a directory at the root of the vault branch:
@@ -585,10 +581,6 @@ Every file under `files/` is binary age ciphertext, regardless of its name. Orig
 relative paths are preserved without extra extensions. The recipients file is
 canonical JSON (`version` 1) with `key` and optional `label` fields. File names,
 sizes, profile names, labels, and Git metadata remain visible.
-
-This layout and the `profiles` / `--profile` CLI replace the previous section
-format and commands. Old layouts and options are not supported; no migration is
-performed.
 
 The tool is intended for small files in application repositories. It does
 not provide secure deletion, key storage, access revocation for old commits, or
