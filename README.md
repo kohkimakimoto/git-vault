@@ -1,6 +1,10 @@
 # git-vault
 
-Store encrypted files in a Git branch, separate from your application code.
+<p align="center">
+  <img alt="git-vault logo" src="./assets/logo.svg">
+</p>
+
+<p align="center">Store encrypted files in an orphan Git branch, separate from your application code.</p>
 
 Managing secrets such as API keys and passwords means balancing risk against operational cost. There are many ways to do it; for smaller projects, encrypting secret files and committing them to the repository can be a practical choice.
 
