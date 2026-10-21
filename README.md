@@ -2,28 +2,15 @@
 
 Store encrypted files in a Git branch, separate from your application code.
 
-Managing secrets such as API keys and passwords means balancing risk against
-operational cost. There are many ways to do it; for smaller projects, encrypting
-secret files and committing them to the repository can be a practical choice.
+Managing secrets such as API keys and passwords means balancing risk against operational cost. There are many ways to do it; for smaller projects, encrypting secret files and committing them to the repository can be a practical choice.
 
-`git vault` supports that workflow. It keeps files such as `.env` encrypted on a
-dedicated branch in the same repository, so secrets can be managed alongside the
-code using familiar Git workflows, without adding encrypted files or configuration
-to the application branch.
+`git vault` supports that workflow. It keeps files such as `.env` encrypted on a dedicated branch in the same repository, so secrets can be managed alongside the code using familiar Git workflows, without adding encrypted files or configuration to the application branch.
 
-This approach has limits: encrypted secrets are copied when the repository is
-cloned and remain in commit history, making complete deletion difficult.
-git-vault was built for projects where the convenience of keeping code and secrets
-in one repository is worth that trade-off.
+This approach has limits: encrypted secrets are copied when the repository is cloned and remain in commit history, making complete deletion difficult. git-vault was built for projects where the convenience of keeping code and secrets in one repository is worth that trade-off.
 
 ## Requirements
 
-git-vault is an external Git subcommand: Git allows an executable named `git-xxx`
-on your PATH to be invoked as `git xxx` (see the
-[Git documentation on PATH](https://git-scm.com/docs/git#Documentation/git.txt-PATH)).
-The `git-vault` executable is a Python script that uses
-[age](https://github.com/FiloSottile/age) for encryption and Git for storage, with
-no third-party Python packages. To run it, you need:
+git-vault is an external Git subcommand: Git allows an executable named `git-xxx` on your PATH to be invoked as `git xxx` (see the [Git documentation on PATH](https://git-scm.com/docs/git#Documentation/git.txt-PATH)). The `git-vault` executable is a Python script that uses [age](https://github.com/FiloSottile/age) for encryption and Git for storage, with no third-party Python packages. To run it, you need:
 
 - Python 3.11 or later
 - Git
@@ -36,22 +23,11 @@ no third-party Python packages. To run it, you need:
 
 ```sh
 brew install kohkimakimoto/tap/git-vault
-git vault version
 ```
 
 ### Manual installation
 
-From a checkout of this repository, copy [`bin/git-vault`](bin/git-vault) to a
-directory on your PATH and make it executable:
-
-```sh
-mkdir -p "$HOME/.local/bin"
-install -m 755 bin/git-vault "$HOME/.local/bin/git-vault"
-export PATH="$HOME/.local/bin:$PATH"
-git vault version
-```
-
-Add the PATH setting to your shell configuration to keep it across sessions.
+Place [`bin/git-vault`](bin/git-vault) somewhere on your `PATH` and make it executable.
 
 ## Quick start
 
@@ -70,10 +46,7 @@ age-keygen -o "$HOME/.config/age/key.txt"
 AGE-SECRET-KEY-14S4CNP040N60QYYWSMGQ2225PSWKSHRCFRSW6954MY2XHC2T9U4QNV05FQ
 ```
 
-The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...`
-comment is the matching public key. Pass that public key to `-r` when you
-initialize a vault or add recipients. Keep the identity file private; git-vault
-stores public keys only, never the private key.
+The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` comment is the matching public key. Pass that public key to `-r` when you initialize a vault or add recipients. Keep the identity file private; git-vault stores public keys only, never the private key.
 
 Inside your application repository:
 
@@ -84,13 +57,9 @@ git vault list
 git push origin vault
 ```
 
-`init` creates an independent `vault` branch with a `default` profile. Every update
-adds a commit to that branch. Your current checkout, application branch, and index
-are left alone. There is no need to switch to the vault branch.
+`init` creates an independent `vault` branch with a `default` profile. Every update adds a commit to that branch. Your current checkout, application branch, and index are left alone. There is no need to switch to the vault branch.
 
-`save` keeps the original plaintext file. **You are responsible for excluding
-plaintext from Git**, for example with your own `.gitignore`. git-vault does not
-inspect or modify ignore settings.
+`save` keeps the original plaintext file. **You are responsible for excluding plaintext from Git**, for example with your own `.gitignore`. git-vault does not inspect or modify ignore settings.
 
 To restore a file that is missing:
 
@@ -116,8 +85,7 @@ git vault profiles list
 git vault restore -p production -f -i /path/to/identity .env
 ```
 
-The same path can be saved in multiple profiles. Restoring different profiles
-writes to the same working-tree path. `default` is selected when `-p` is omitted.
+The same path can be saved in multiple profiles. Restoring different profiles writes to the same working-tree path. `default` is selected when `-p` is omitted.
 
 ```sh
 # Re-save every path already registered in this profile.
@@ -133,16 +101,13 @@ git vault remove -p production .env
 git vault profiles remove production
 ```
 
-`save -a` does not discover new files. Register them with explicit paths first.
-If any registered source file is missing, the entire save fails.
+`save -a` does not discover new files. Register them with explicit paths first. If any registered source file is missing, the entire save fails.
 
 ## Private key input
 
-Identity is required only when decrypting (restore, or recipients add/remove when
-the profile has files). Resolve it as follows:
+Identity is required only when decrypting (restore, or recipients add/remove when the profile has files). Resolve it as follows:
 
-1. `-i` / `--identity PATH`. Use `-i -` to read an identity from stdin (same
-   meaning as age). Overrides `vault.identity`.
+1. `-i` / `--identity PATH`. Use `-i -` to read an identity from stdin (same meaning as age). Overrides `vault.identity`.
 2. Otherwise `git config vault.identity` (see below).
 3. Otherwise the command fails. There is no implicit stdin read and no prompt.
 
@@ -154,10 +119,7 @@ git config --global vault.identity ~/.config/age/key.txt
 git vault restore .env
 ```
 
-`-i -` is read once per operation into a temporary file and reused for every
-decrypt in that operation. Do not combine `-i -` with `-R -`. Multiple native age
-secrets belong in one identity file (age's multi-line format). Multiple SSH
-private key files cannot be supplied in a single operation.
+`-i -` is read once per operation into a temporary file and reused for every decrypt in that operation. Do not combine `-i -` with `-R -`. Multiple native age secrets belong in one identity file (age's multi-line format). Multiple SSH private key files cannot be supplied in a single operation.
 
 ### `vault.identity`
 
@@ -168,21 +130,13 @@ Set a default identity file path in Git config (not the key material):
 	identity = ~/.config/age/key.txt
 ```
 
-Each selected scope defines a single path. Paths must be absolute or start with
-`~`. git-vault uses the highest Git config scope that defines the key (`command`
-→ `worktree` → `local` → `global` → `system`), including `include` / `includeIf`,
-and does not fall back to stdin if the configured path is missing.
+Each selected scope defines a single path. Paths must be absolute or start with `~`. git-vault uses the highest Git config scope that defines the key (`command` → `worktree` → `local` → `global` → `system`), including `include` / `includeIf`, and does not fall back to stdin if the configured path is missing.
 
 ## Recipients
 
-A recipient is who may use a profile's secrets (a person, bot, or role). Each
-recipient is a public key accepted by age (native `age...` / `age1pq1...`, or SSH
-keys such as `ssh-ed25519` / `ssh-rsa`, subject to age). Labels are git-vault
-metadata; encryption uses the public key. See age's documentation for supported
-key types.
+A recipient is who may use a profile's secrets (a person, bot, or role). Each recipient is a public key accepted by age (native `age...` / `age1pq1...`, or SSH keys such as `ssh-ed25519` / `ssh-rsa`, subject to age). Labels are git-vault metadata; encryption uses the public key. See age's documentation for supported key types.
 
-Each profile stores recipients as JSON at `<profile>/recipients`. CLI input uses
-`-r` / `-R` like age:
+Each profile stores recipients as JSON at `<profile>/recipients`. CLI input uses `-r` / `-R` like age:
 
 ```sh
 git vault recipients list -p production
@@ -193,20 +147,9 @@ git vault recipients remove -p production -i /path/to/identity -r age...
 git vault init -R teammates.txt
 ```
 
-Provide recipients with `-r KEY` or `-R PATH` (age-style; the two cannot be
-combined). `-R` may list several keys, one per line. Optional `-l` / `--label`
-attaches a non-unique description when adding via `init`, `profiles add`, or
-`recipients add`: omit labels, or pass one label per key. For `-R`, labels follow
-the file's key order, excluding empty lines and comment lines. Labels cannot be
-changed later except by removing and re-adding the recipient.
+Provide recipients with `-r KEY` or `-R PATH` (age-style; the two cannot be combined). `-R` may list several keys, one per line. Optional `-l` / `--label` attaches a non-unique description when adding via `init`, `profiles add`, or `recipients add`: omit labels, or pass one label per key. For `-R`, labels follow the file's key order, excluding empty lines and comment lines. Labels cannot be changed later except by removing and re-adding the recipient.
 
-`recipients add` and `recipients remove` do not only edit the public key list.
-When the profile has saved files, git-vault must **decrypt every ciphertext with a
-private identity, then re-encrypt it for the updated public keys**, and commit
-the new list and ciphertexts together. That is why a private key is required
-unless the profile is empty: age ciphertext cannot be rewritten from public keys
-alone. If any decryption or encryption fails, the branch is not updated. The last
-public key cannot be removed.
+`recipients add` and `recipients remove` do not only edit the public key list. When the profile has saved files, git-vault must **decrypt every ciphertext with a private identity, then re-encrypt it for the updated public keys**, and commit the new list and ciphertexts together. That is why a private key is required unless the profile is empty: age ciphertext cannot be rewritten from public keys alone. If any decryption or encryption fails, the branch is not updated. The last public key cannot be removed.
 
 Among CLI commands, only these operations need a private identity:
 
@@ -217,16 +160,9 @@ Among CLI commands, only these operations need a private identity:
 
 ### Recommended practice: a master key
 
-Include one privileged public key in **every** profile (for example at `init` and
-each `profiles add`), and keep that identity available for `recipients add` /
-`remove` and emergency restore across profiles.
+Include one privileged public key in **every** profile (for example at `init` and each `profiles add`), and keep that identity available for `recipients add` / `remove` and emergency restore across profiles.
 
-Treat that identity as high privilege: it can decrypt the current snapshot of every
-profile where it is listed. Store it offline or with strict access control, prefer
-a clear `-l` label such as `master`, and avoid using it as the day-to-day key for
-routine restore when a narrower key is enough. Removing it from a profile still
-leaves historical commits decryptable by anyone who held it, as with any key
-removal.
+Treat that identity as high privilege: it can decrypt the current snapshot of every profile where it is listed. Store it offline or with strict access control, prefer a clear `-l` label such as `master`, and avoid using it as the day-to-day key for routine restore when a narrower key is enough. Removing it from a profile still leaves historical commits decryptable by anyone who held it, as with any key removal.
 
 Removing a public key does not revoke access to historical ciphertext.
 
@@ -240,8 +176,7 @@ git vault save -m "Update secrets" -m "Use the new database" .env
 git vault save -F /path/to/message.txt .env
 ```
 
-Repeat `-m` to separate paragraphs. `-F` reads a UTF-8 file; reading the message
-from stdin with `-F -` is not supported. Messages cannot be empty.
+Repeat `-m` to separate paragraphs. `-F` reads a UTF-8 file; reading the message from stdin with `-F -` is not supported. Messages cannot be empty.
 
 When omitted, messages are generated with a `git-vault:` prefix:
 
@@ -251,16 +186,11 @@ git-vault: Save files in profile production
 .env
 ```
 
-Explicit messages are used without a prefix or format marker. Commit messages are
-not encrypted; do not put secrets in them. Git's usual author configuration is
-used. Set `user.name` and `user.email` if necessary.
+Explicit messages are used without a prefix or format marker. Commit messages are not encrypted; do not put secrets in them. Git's usual author configuration is used. Set `user.name` and `user.email` if necessary.
 
 ## Working branches and pull requests
 
-`-b` always names the local branch to operate on. `init` creates that branch and
-rejects an existing name. Other commands require an existing branch, unless the
-command supports `-n` and you pass it to create a new one. This prevents a typo
-from creating a branch.
+`-b` always names the local branch to operate on. `init` creates that branch and rejects an existing name. Other commands require an existing branch, unless the command supports `-n` and you pass it to create a new one. This prevents a typo from creating a branch.
 
 ```sh
 git fetch origin
@@ -274,21 +204,15 @@ git vault save -p production -b vault-update-db credentials.json
 git push origin vault-update-db
 ```
 
-Create a pull request from `vault-update-db` to `vault` using your hosting service.
-If `-B` is omitted, new branches start from the local `vault` branch. `-n` requires
-an explicit `-b`, and fails if that branch already exists. `-B` requires `-n`.
+Create a pull request from `vault-update-db` to `vault` using your hosting service. If `-B` is omitted, new branches start from the local `vault` branch. `-n` requires an explicit `-b`, and fails if that branch already exists. `-B` requires `-n`.
 
-Working branches are also available for `remove`, `profiles add/remove`, and
-`recipients add/remove`. Creation is committed only after the operation succeeds.
-A vault branch checked out in any worktree cannot be updated by git-vault.
+Working branches are also available for `remove`, `profiles add/remove`, and `recipients add/remove`. Creation is committed only after the operation succeeds. A vault branch checked out in any worktree cannot be updated by git-vault.
 
-Git cannot have both `vault` and `vault/update-db` branches. Use names such as
-`vault-update-db` for working branches.
+Git cannot have both `vault` and `vault/update-db` branches. Use names such as `vault-update-db` for working branches.
 
 ## Cloning and synchronization
 
-Remote operations use ordinary Git commands; git-vault never fetches or pushes.
-After cloning the application branch, create a local vault branch from the remote:
+Remote operations use ordinary Git commands; git-vault never fetches or pushes. After cloning the application branch, create a local vault branch from the remote:
 
 ```sh
 git fetch origin
@@ -296,34 +220,21 @@ git branch --track vault origin/vault
 git vault restore -a -i /path/to/identity
 ```
 
-This does not change your checkout. Skip the branch creation if local `vault`
-already exists. To fast-forward an existing local vault branch from the remote:
+This does not change your checkout. Skip the branch creation if local `vault` already exists. To fast-forward an existing local vault branch from the remote:
 
 ```sh
 git fetch origin vault:vault
 ```
 
-A plain `git fetch origin` normally updates `origin/vault`, not local `vault`.
-If your local and remote vault branches diverge, retain the plaintext changes you
-need and reapply them on a new branch from the latest `origin/vault`. The tool does
-not merge ciphertext or force-push.
+A plain `git fetch origin` normally updates `origin/vault`, not local `vault`. If your local and remote vault branches diverge, retain the plaintext changes you need and reapply them on a new branch from the latest `origin/vault`. The tool does not merge ciphertext or force-push.
 
-For pull requests, reapply changes if recipients in the same profile changed since
-the working branch was created. Git may merge a recipients change and a different
-file change without a text conflict, even though the resulting ciphertext does
-not match the recipients. Process those changes against the latest vault state.
-Merge and squash commit messages need no special prefix or trailer.
+For pull requests, reapply changes if recipients in the same profile changed since the working branch was created. Git may merge a recipients change and a different file change without a text conflict, even though the resulting ciphertext does not match the recipients. Process those changes against the latest vault state. Merge and squash commit messages need no special prefix or trailer.
 
 ## Command reference
 
-Options follow the operation: `git vault save -p production .env`, or
-`git vault recipients add -p production -r age...`.
+Options follow the operation: `git vault save -p production .env`, or `git vault recipients add -p production -r age...`.
 
-Paths are relative to the current directory; `-a` uses stored repository-relative
-paths. Use `--` before file names beginning with `-`. Force does not bypass symlink,
-path, or concurrent-update checks. Commit messages are public; never include
-secrets. When `-m` and `-F` are omitted, a message with a `git-vault:` prefix is
-generated.
+Paths are relative to the current directory; `-a` uses stored repository-relative paths. Use `--` before file names beginning with `-`. Force does not bypass symlink, path, or concurrent-update checks. Commit messages are public; never include secrets. When `-m` and `-F` are omitted, a message with a `git-vault:` prefix is generated.
 
 ### `init`
 
@@ -399,8 +310,7 @@ Remove the profile named `NAME`. It must be empty and cannot be `default`.
 git vault recipients list [options]
 ```
 
-List recipients for the selected profile. Default lines are `KEY` or `KEY  LABEL`.
-`--json` prints the canonical stored JSON.
+List recipients for the selected profile. Default lines are `KEY` or `KEY  LABEL`. `--json` prints the canonical stored JSON.
 
 | Option | Purpose |
 | --- | --- |
@@ -530,8 +440,7 @@ Remove the specified paths from the current saved snapshot in one commit. Keep w
 git vault version
 ```
 
-Print the version hardcoded in the script, such as `0.8.0`. No repository or age
-installation is required.
+Print the version hardcoded in the script, such as `0.8.0`. No repository or age installation is required.
 
 | Option | Purpose |
 | --- | --- |
@@ -545,16 +454,9 @@ git vault skill -o
 git vault skill -o .claude/skills/git-vault/SKILL.md
 ```
 
-Print a self-contained agent skill as SKILL.md content to stdout. The skill explains
-how an AI agent should use git-vault's profiles, recipients, restore operations,
-and working branches. No repository or age installation is required to generate it.
+Print a self-contained agent skill as SKILL.md content to stdout. The skill explains how an AI agent should use git-vault's profiles, recipients, restore operations, and working branches. No repository or age installation is required to generate it.
 
-Use `-o` without a path to install it at `.agents/skills/git-vault/SKILL.md`, or
-provide a full file path to use another location, such as `.claude/skills/git-vault/SKILL.md`.
-Relative paths start from the current directory. Missing parent directories are
-created. File mode writes the skill to the file and a confirmation to stderr,
-leaving stdout empty. Existing files are preserved unless `-f` is specified;
-symlink output files are rejected even with `-f`.
+Use `-o` without a path to install it at `.agents/skills/git-vault/SKILL.md`, or provide a full file path to use another location, such as `.claude/skills/git-vault/SKILL.md`. Relative paths start from the current directory. Missing parent directories are created. File mode writes the skill to the file and a confirmation to stderr, leaving stdout empty. Existing files are preserved unless `-f` is specified; symlink output files are rejected even with `-f`.
 
 | Option | Purpose |
 | --- | --- |
@@ -577,18 +479,9 @@ production/
     .env
 ```
 
-Every file under `files/` is binary age ciphertext, regardless of its name. Original
-relative paths are preserved without extra extensions. The recipients file is
-canonical JSON (`version` 1) with `key` and optional `label` fields. File names,
-sizes, profile names, labels, and Git metadata remain visible.
+Every file under `files/` is binary age ciphertext, regardless of its name. Original relative paths are preserved without extra extensions. The recipients file is canonical JSON (`version` 1) with `key` and optional `label` fields. File names, sizes, profile names, labels, and Git metadata remain visible.
 
-The tool is intended for small files in application repositories. It does
-not provide secure deletion, key storage, access revocation for old commits, or
-automatic conflict resolution. Removing a saved file leaves its history intact.
-Only regular files inside the working tree are supported; directories, symlinks,
-Git administration paths, and Windows are outside the initial scope. Original
-ownership, timestamps, and executable permissions are not preserved. Restored files
-have mode `0600`, and newly created directories have mode `0700`.
+The tool is intended for small files in application repositories. It does not provide secure deletion, key storage, access revocation for old commits, or automatic conflict resolution. Removing a saved file leaves its history intact. Only regular files inside the working tree are supported; directories, symlinks, Git administration paths, and Windows are outside the initial scope. Original ownership, timestamps, and executable permissions are not preserved. Restored files have mode `0600`, and newly created directories have mode `0700`.
 
 ## Tests
 
@@ -596,24 +489,15 @@ have mode `0600`, and newly created directories have mode `0700`.
 ./tests/run.sh
 ```
 
-Each script in `tests/cases/` exercises one scenario by running `git vault` and
-ordinary Git/age commands directly. To run just one scenario:
+Each script in `tests/cases/` exercises one scenario by running `git vault` and ordinary Git/age commands directly. To run just one scenario:
 
 ```sh
 bash tests/cases/03-recipients.sh
 ```
 
-`tests/common.sh` contains temporary-repository setup and small assertions. Each
-scenario creates disposable keys and repositories, isolates personal Git
-configuration, and cleans up afterward. Tests cover round trips, profiles,
-recipient rotation and labels, working branches, messages, force handling, paths,
-historical restore, linked worktrees, remote divergence, failure atomicity, and
-agent skill output and installation.
+`tests/common.sh` contains temporary-repository setup and small assertions. Each scenario creates disposable keys and repositories, isolates personal Git configuration, and cleans up afterward. Tests cover round trips, profiles, recipient rotation and labels, working branches, messages, force handling, paths, historical restore, linked worktrees, remote divergence, failure atomicity, and agent skill output and installation.
 
-There is no test framework or Python package dependency. Bash, Git, age, age-keygen,
-ssh-keygen, and Python (for git-vault itself) are required. The stdin identity test restores
-multiple files in one operation to verify that the identity is read once and
-reused. Tests never import git-vault's implementation.
+There is no test framework or Python package dependency. Bash, Git, age, age-keygen, ssh-keygen, and Python (for git-vault itself) are required. The stdin identity test restores multiple files in one operation to verify that the identity is read once and reused. Tests never import git-vault's implementation.
 
 ## Author
 
