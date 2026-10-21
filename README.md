@@ -540,7 +540,7 @@ Remove the specified paths from the current saved snapshot in one commit. Keep w
 git vault version
 ```
 
-Print the version hardcoded in the script, such as `0.8.0`. No repository or age installation is required.
+Print the version hardcoded in the script, such as `0.9.0`. No repository or age installation is required.
 
 | Option | Purpose |
 | --- | --- |
