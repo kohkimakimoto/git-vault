@@ -23,7 +23,7 @@ age -d -i "$KEY1" "$TEST_ROOT/ciphertext" >"$TEST_ROOT/decrypted"
 cmp "$TEST_ROOT/expected" "$TEST_ROOT/decrypted"
 rm -- .env 'space name' '日本語' '-leading' config config.age/token
 rmdir config.age
-git vault restore --all <"$KEY1"
+git vault restore --all -i - <"$KEY1"
 for file in .env 'space name' '日本語' '-leading' config config.age/token; do
     cmp "./$file" "$TEST_ROOT/expected"
     assert_eq "$(ls -ld -- "$file" | cut -c1-10)" '-rw-------'
@@ -32,7 +32,7 @@ assert_eq "$(ls -ld config.age | cut -c1-10)" 'drwx------'
 expect_exit 1 git vault restore -i "$KEY1" .env
 printf 'changed\n' >.env
 git vault save -a
-git vault restore -f -R "$saved" -i "$KEY1" .env
+git vault restore -f --revision "$saved" -i "$KEY1" .env
 cmp .env "$TEST_ROOT/expected"
 rm config.age/token
 before="$(git rev-parse vault)"

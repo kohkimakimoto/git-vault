@@ -5,7 +5,7 @@
 import argparse
 from contextlib import contextmanager
 from dataclasses import dataclass
-import getpass
+import json
 import os
 from pathlib import Path
 import re
@@ -15,7 +15,7 @@ import subprocess
 import sys
 import tempfile
 
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 
 DEFAULT_SKILL_PATH = ".agents/skills/git-vault/SKILL.md"
 
@@ -114,25 +114,25 @@ AGE-SECRET-KEY-14S4CNP040N60QYYWSMGQ2225PSWKSHRCFRSW6954MY2XHC2T9U4QNV05FQ
 
 The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...`
 comment is the matching public key. Use that public key with `-r` / recipients.
-Use the identity file (or its private key) with `-i` / stdin to decrypt. Never
-read, print, or pass the private key in conversation or command arguments.
+Use the identity file with `-i PATH` to decrypt. To read an identity from stdin,
+use `-i -` (like age). Optionally set `git config vault.identity /path/to/key`
+as a default when `-i` is omitted. Never read, print, or pass the private key in
+conversation or command arguments.
 
 ## Restore files
 
 ```sh
 git vault restore -p production -i /path/to/identity -- .env
-git vault restore -p production -- .env < /path/to/identity
+git vault restore -p production -i - -- .env < /path/to/identity
 ```
 
-Use an identity file or redirect its contents without reading or printing private
-keys into the conversation or command arguments. Repeat `-i` for multiple identity
-files. Without `-i`, non-terminal stdin supplies identity contents; terminal stdin
-prompts without echo. Prefer file input for noninteractive agent execution.
+Use `-i` (repeatable) or `vault.identity`. Prefer file input for noninteractive
+agent execution. Do not rely on implicit stdin without `-i -`.
 
 Restore writes plaintext files with mode `0600`. Do not print restored secrets;
 inspect names and command exit status when contents are unnecessary to the task.
-`restore -a` restores the whole profile. `-R REV` restores a historical commit
-reachable from the selected branch.
+`restore -a` restores the whole profile. `--revision REV` restores a historical
+commit reachable from the selected branch.
 
 Existing files and tracked paths are rejected by default. Use `restore -f` only
 when overwriting the destination, including any uncommitted changes, is within
@@ -150,22 +150,22 @@ exists, use that history instead of creating an independent vault:
 git branch --track vault origin/vault
 ```
 
-For a new vault or profile, obtain the intended age public keys from the user
-or project context. Native age public keys look like `age...` (see Age identity
-files above).
+For a new vault or profile, obtain the intended public keys from the user or
+project context. Key types follow age (`age...`, SSH public keys, etc.).
 
 ```sh
 git vault init -r age...
+git vault init -R ~/.ssh/id_ed25519.pub -l laptop
 git vault profiles add production -r age...
-git vault recipients add -p production -i /path/to/identity age...
-git vault recipients remove -p production -i /path/to/identity age...
+git vault recipients add -p production -i /path/to/identity -r age...
+git vault recipients remove -p production -i /path/to/identity -r age...
 git vault remove -p production -- .env
 git vault profiles remove production
 ```
 
-Repeat `-r` to initialize with multiple public keys. Optional `-l` sets a
-non-unique label for each recipient in the same order (zero labels, or one per
-key). Labels are metadata only; identify recipients by public key.
+Use one `-r` or one `-R` for recipients (not both; do not repeat). Optional `-l`
+labels keys (zero, or one per `-r` key / per `-R` line). Use one `-i` (or
+`vault.identity`). Labels are metadata only; identify recipients by public key.
 
 `recipients add` and `recipients remove` decrypt every saved file in the profile,
 then re-encrypt for the updated public keys, and commit the list and ciphertext
@@ -267,13 +267,35 @@ def valid_path(name):
     return name
 
 
-AGE_RECIPIENT = re.compile(r"age[0-9a-z]{59}")
+CONFIG_SCOPE_ORDER = ("command", "worktree", "local", "global", "system")
+
+
+class StoreOnce(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        if getattr(namespace, self.dest) is not None:
+            parser.error(f"{option_string} may be specified at most once")
+        setattr(namespace, self.dest, values)
 
 
 def valid_label(label):
-    if not label or not label.strip() or "\0" in label or "\n" in label or "\r" in label:
+    if not isinstance(label, str):
+        raise VaultError("Recipient labels must be strings.", 2)
+    label = label.strip()
+    if not label or "\0" in label or "\n" in label or "\r" in label:
         raise VaultError("Recipient labels must be nonempty and contain no NUL or newlines.", 2)
     return label
+
+
+def normalize_key(key):
+    if not isinstance(key, str):
+        raise VaultError("Public keys must be strings.", 2)
+    key = key.strip()
+    if not key or "\0" in key or "\n" in key or "\r" in key:
+        raise VaultError("Invalid public key.", 2)
+    parts = key.split()
+    if parts and parts[0].startswith("ssh-") and len(parts) >= 2:
+        return f"{parts[0]} {parts[1]}"
+    return key
 
 
 def pair_recipients(keys, labels):
@@ -286,16 +308,19 @@ def pair_recipients(keys, labels):
 
 
 def normalize_recipients(pairs):
-    by_key = {}
+    seen = set()
+    recipients = []
     for key, label in pairs:
-        if not AGE_RECIPIENT.fullmatch(key):
-            raise VaultError("At least one valid native age public key (age...) is required.")
-        if key in by_key and by_key[key] != label:
-            raise VaultError(f"Conflicting labels for public key: {key}", 2)
-        by_key[key] = label
-    if not by_key:
-        raise VaultError("At least one valid native age public key (age...) is required.")
-    return sorted(by_key.items())
+        key = normalize_key(key)
+        if label is not None:
+            label = valid_label(label)
+        if key in seen:
+            raise VaultError(f"Duplicate public key: {key}", 2)
+        seen.add(key)
+        recipients.append((key, label))
+    if not recipients:
+        raise VaultError("At least one public key is required.")
+    return sorted(recipients, key=lambda item: item[0])
 
 
 def recipient_keys(recipients):
@@ -303,24 +328,48 @@ def recipient_keys(recipients):
 
 
 def format_recipient_line(key, label):
-    return f"{key} {label}" if label else key
+    return f"{key}  {label}" if label else key
 
 
-def parse_recipients_text(text):
+def dump_recipients_json(recipients):
+    items = []
+    for key, label in recipients:
+        entry = {"key": key}
+        if label is not None:
+            entry["label"] = label
+        items.append(entry)
+    return json.dumps({"recipients": items, "version": 1}, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+
+
+def parse_recipients_json(text):
     if not text.endswith("\n"):
         raise VaultError("Invalid recipients file.")
-    lines = text.splitlines()
-    if not lines:
+    try:
+        doc = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise VaultError("Invalid recipients file.") from error
+    if not isinstance(doc, dict) or set(doc) != {"version", "recipients"}:
+        raise VaultError("Invalid recipients file.")
+    if doc.get("version") != 1:
+        raise VaultError("Invalid recipients file.")
+    raw = doc.get("recipients")
+    if not isinstance(raw, list) or not raw:
         raise VaultError("Invalid recipients file.")
     pairs = []
-    for line in lines:
-        if " " in line:
-            key, label = line.split(" ", 1)
-            pairs.append((key, valid_label(label)))
+    for item in raw:
+        if not isinstance(item, dict) or "key" not in item:
+            raise VaultError("Invalid recipients file.")
+        extra = set(item) - {"key", "label"}
+        if extra:
+            raise VaultError("Invalid recipients file.")
+        if "label" in item:
+            if item["label"] is None or not isinstance(item["label"], str):
+                raise VaultError("Invalid recipients file.")
+            pairs.append((item["key"], item["label"]))
         else:
-            pairs.append((line, None))
+            pairs.append((item["key"], None))
     recipients = normalize_recipients(pairs)
-    if [format_recipient_line(key, label) for key, label in recipients] != lines:
+    if dump_recipients_json(recipients) != text:
         raise VaultError("Invalid recipients file.")
     return recipients
 
@@ -334,38 +383,118 @@ def encrypt(data, keys):
 
 def validate_recipients(pairs):
     recipients = normalize_recipients(pairs)
-    encrypt(b"", recipient_keys(recipients))  # Let age validate the Bech32 checksum as well.
+    keys = recipient_keys(recipients)
+    for key in keys:
+        encrypt(b"", [key])
+    if len(keys) > 1:
+        encrypt(b"", keys)
     return recipients
 
 
-def recipients_from_args(keys, labels):
-    return validate_recipients(pair_recipients(keys, labels))
+def read_recipients_file(path):
+    if path == "-":
+        text = sys.stdin.read()
+    else:
+        file = Path(path)
+        if not file.is_file():
+            raise VaultError(f"Recipients file not found: {path}", 2)
+        text = file.read_text(encoding="utf-8")
+    keys = []
+    for line in text.splitlines():
+        if not line or line.startswith("#"):
+            continue
+        keys.append(line)
+    return keys
+
+
+def check_recipient_stdin(args):
+    if getattr(args, "recipients_file", None) == "-" and getattr(args, "identity", None) == "-":
+        raise VaultError("Cannot use -R - and -i - together.", 2)
+
+
+def recipients_from_cli(args, *, labels=True):
+    recipient = getattr(args, "recipient", None)
+    recipients_file = getattr(args, "recipients_file", None)
+    if recipient is not None and recipients_file is not None:
+        raise VaultError("Use either -r/--recipient or -R/--recipients-file, not both.", 2)
+    if recipient is None and recipients_file is None:
+        raise VaultError("Specify -r/--recipient or -R/--recipients-file.", 2)
+    if recipient is not None:
+        keys = [recipient]
+    else:
+        keys = read_recipients_file(recipients_file)
+        if not keys:
+            raise VaultError("No public keys found in -R/--recipients-file.", 2)
+    label_args = getattr(args, "label", None) if labels else None
+    return validate_recipients(pair_recipients(keys, label_args))
+
+
+def expand_identity_path(value):
+    if not isinstance(value, str) or value == "-" or "\0" in value or "\n" in value or "\r" in value:
+        raise VaultError("Invalid vault.identity path.")
+    if not (value.startswith("~") or os.path.isabs(value)):
+        raise VaultError("vault.identity must be an absolute path or start with ~.")
+    return str(Path(value).expanduser())
+
+
+def vault_identity_path(repo):
+    result = repo.git("config", "--includes", "--show-scope", "--null", "--get-all", "vault.identity", check=False)
+    if result.returncode not in (0, 1):
+        raise VaultError("Cannot read vault.identity from git config.")
+    raw = result.stdout
+    if not raw:
+        return None
+    parts = raw.split(b"\0")
+    if parts and parts[-1] == b"":
+        parts = parts[:-1]
+    if len(parts) % 2:
+        raise VaultError("Cannot parse vault.identity from git config.")
+    entries = []
+    for index in range(0, len(parts), 2):
+        scope = parts[index].decode("utf-8", "surrogateescape")
+        value = parts[index + 1].decode("utf-8", "surrogateescape")
+        entries.append((scope, value))
+    chosen = next((scope for scope in CONFIG_SCOPE_ORDER if any(item[0] == scope for item in entries)), None)
+    if chosen is None:
+        return None
+    values = [expand_identity_path(value) for scope, value in entries if scope == chosen]
+    if len(values) > 1:
+        raise VaultError("vault.identity must be a single path; multiple values are not supported.")
+    return values[0]
 
 
 @contextmanager
-def identities(paths):
-    if paths:
-        resolved = []
-        for path in paths:
-            file = Path(path).absolute()
+def identities(repo, path):
+    temporary = None
+    try:
+        if path is not None:
+            if path == "-":
+                content = sys.stdin.buffer.read()
+                if not content.strip():
+                    raise VaultError("No private key supplied on stdin.")
+                temporary = tempfile.TemporaryDirectory(prefix="git-vault-key-")
+                os.chmod(temporary.name, 0o700)
+                target = Path(temporary.name) / "identity"
+                fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(fd, "wb") as stream:
+                    stream.write(content)
+                yield [str(target)]
+                return
+            file = Path(path).expanduser()
+            file = file if file.is_absolute() else Path(path).absolute()
             if not file.is_file():
                 raise VaultError(f"Identity file not found: {path}")
-            resolved.append(str(file))
-        yield resolved
-        return
-    if sys.stdin.isatty():
-        content = getpass.getpass("Input private key content: ").encode("utf-8")
-    else:
-        content = sys.stdin.buffer.read()
-    if not content.strip():
-        raise VaultError("No private key supplied. Use -i, stdin, or interactive input.")
-    with tempfile.TemporaryDirectory(prefix="git-vault-key-") as directory:
-        os.chmod(directory, 0o700)
-        path = Path(directory) / "identity"
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, "wb") as stream:
-            stream.write(content)
-        yield [str(path)]
+            yield [str(file)]
+            return
+        config_path = vault_identity_path(repo)
+        if config_path is None:
+            raise VaultError("No identity specified. Use -i or set vault.identity.")
+        if not Path(config_path).is_file():
+            raise VaultError(f"Identity file not found: {config_path}")
+        yield [config_path]
+    finally:
+        if temporary is not None:
+            temporary.cleanup()
 
 
 def decrypt(data, paths):
@@ -459,7 +588,7 @@ class Repository:
                 except UnicodeError:
                     raise VaultError("Recipients must be UTF-8.") from None
                 try:
-                    profile.recipients = parse_recipients_text(text)
+                    profile.recipients = parse_recipients_json(text)
                 except VaultError as error:
                     raise VaultError(f"Invalid recipients file in profile {profile_name}") from error
             elif len(parts) >= 3 and parts[1] == "files":
@@ -484,8 +613,7 @@ class Repository:
         flat = {}
         for name, profile in profiles.items():
             base = f"{name}/"
-            body = "\n".join(format_recipient_line(key, label) for key, label in profile.recipients) + "\n"
-            flat[base + "recipients"] = self.hash_blob(body.encode())
+            flat[base + "recipients"] = self.hash_blob(dump_recipients_json(profile.recipients).encode())
             for path, oid in profile.files.items():
                 flat[base + "files/" + path] = oid
         nested = {}
@@ -608,7 +736,7 @@ def restore(repo, args, profile, names):
     if not names:
         print("No files.")
         return
-    with identities(args.identity) as keys:
+    with identities(repo, getattr(args, "identity", None)) as keys:
         contents = [decrypt(repo.blob(profile.files[name]), keys) for name in names]
     # Reject duplicate normalized destinations before writing any plaintext.
     aliases = [os.path.normcase(str(path.resolve())) for path in destinations]
@@ -662,8 +790,9 @@ def execute(args):
     if args.operation == "init":
         if old_oid:
             raise VaultError(f"Branch already exists: {branch}")
+        check_recipient_stdin(args)
         message = message_for(args)
-        profiles = {"default": Profile(recipients_from_args(args.recipient, args.label), {})}
+        profiles = {"default": Profile(recipients_from_cli(args), {})}
         repo.commit(ref, None, None, profiles, message)
         return
     new = getattr(args, "new_branch", False)
@@ -690,7 +819,8 @@ def execute(args):
         if action == "add":
             if name in profiles:
                 raise VaultError(f"Profile already exists: {name}")
-            profiles[name] = Profile(recipients_from_args(args.recipient, args.label), {})
+            check_recipient_stdin(args)
+            profiles[name] = Profile(recipients_from_cli(args), {})
         else:
             if name not in profiles:
                 raise VaultError(f"Profile does not exist: {name}")
@@ -704,24 +834,28 @@ def execute(args):
         raise VaultError(f"Profile does not exist: {args.profile}")
     profile = profiles[args.profile]
     if args.operation == "recipients-list":
-        print("\n".join(format_recipient_line(key, label) for key, label in profile.recipients))
+        if getattr(args, "json", False):
+            sys.stdout.write(dump_recipients_json(profile.recipients))
+        else:
+            print("\n".join(format_recipient_line(key, label) for key, label in profile.recipients))
         return
     if args.operation.startswith("recipients-"):
+        check_recipient_stdin(args)
         existing = dict(profile.recipients)
         if args.operation == "recipients-add":
-            supplied = dict(normalize_recipients(pair_recipients(args.keys, args.label)))
+            supplied = dict(recipients_from_cli(args))
             if existing.keys() & supplied.keys():
                 raise VaultError("A public key is already present.")
             recipients = validate_recipients([*existing.items(), *supplied.items()])
         else:
-            supplied = {key for key, _ in normalize_recipients([(key, None) for key in args.keys])}
-            if not supplied.issubset(existing):
+            supplied = dict(recipients_from_cli(args, labels=False))
+            if not supplied.keys() <= existing.keys():
                 raise VaultError("A public key is not present.")
             recipients = validate_recipients([(key, label) for key, label in existing.items() if key not in supplied])
         message = message_for(args)
         keys = recipient_keys(recipients)
         if profile.files:
-            with identities(args.identity) as identity_paths:
+            with identities(repo, getattr(args, "identity", None)) as identity_paths:
                 files = {}
                 for name, oid in profile.files.items():
                     plaintext = decrypt(repo.blob(oid), identity_paths)
@@ -770,7 +904,7 @@ def parser_for_cli():
 Examples:
   git vault init -r age...
   git vault save -p production -m 'Rotate credentials' -- .env
-  git vault restore -a < /path/to/identity
+  git vault restore -a -i /path/to/identity
   git vault save -b vault-update -n -B origin/vault -- .env
 
 Exit codes: 0 success; 1 operation failed; 2 invalid arguments; 3 ref conflict.
@@ -822,18 +956,22 @@ Plaintext exclusion is your responsibility; ignore settings are never modified.
             p.add_argument("-B", "--base", metavar="REF", help="Set the creation base (default: vault); requires -n.")
         if identity:
             p.add_argument(
-                "-i", "--identity", action="append", metavar="PATH",
-                help="Use an identity file; repeat for multiple files. Otherwise read stdin or prompt without echo.",
+                "-i", "--identity", action=StoreOnce, metavar="PATH", default=None,
+                help="Use one identity file. Use -i - to read identity from stdin. Overrides vault.identity.",
             )
         if recipient:
             p.add_argument(
-                "-r", "--recipient", action="append", required=True, metavar="KEY",
-                help="Add a native age public key; repeat for multiple keys.",
+                "-r", "--recipient", action=StoreOnce, metavar="KEY", default=None,
+                help="Add one public key (age or SSH, as accepted by age). Mutually exclusive with -R.",
+            )
+            p.add_argument(
+                "-R", "--recipients-file", action=StoreOnce, metavar="PATH", default=None,
+                help="Read public keys from one file (age -R format); use - for stdin. Mutually exclusive with -r.",
             )
         if label:
             p.add_argument(
                 "-l", "--label", action="append", metavar="TEXT",
-                help="Set an optional recipient label; repeat once per public key in the same order.",
+                help="Optional label; zero labels, or one per key from -r or from each -R line, in order.",
             )
         return p
 
@@ -841,18 +979,19 @@ Plaintext exclusion is your responsibility; ignore settings are never modified.
     for name in ("profiles", "recipients"):
         group_parser = commands.add_parser(name, help=f"Manage {name}.")
         group = group_parser.add_subparsers(dest="action", required=True)
-        leaf(group, "list", name + "-list", f"List {name}.", profile=name == "recipients")
+        listed = leaf(group, "list", name + "-list", f"List {name}.", profile=name == "recipients")
+        if name == "recipients":
+            listed.add_argument("--json", action="store_true", help="Print recipients as canonical JSON.")
         for action in ("add", "remove"):
             p = leaf(
                 group, action, name + "-" + action, f"{action.capitalize()} {name}.",
                 profile=name == "recipients", update=True, create=True,
-                identity=name == "recipients", recipient=name == "profiles" and action == "add",
+                identity=name == "recipients",
+                recipient=(name == "profiles" and action == "add") or (name == "recipients"),
                 label=(name == "profiles" and action == "add") or (name == "recipients" and action == "add"),
             )
             if name == "profiles":
                 p.add_argument("name", metavar="NAME", help="Name the profile.")
-            else:
-                p.add_argument("keys", nargs="+", metavar="KEY", help="Specify native age public keys.")
     leaf(commands, "list", "list", "List saved paths in a profile.", profile=True)
     for operation in ("save", "restore", "remove"):
         p = leaf(
@@ -877,7 +1016,7 @@ Plaintext exclusion is your responsibility; ignore settings are never modified.
         else:
             p.set_defaults(all=False)
         if operation == "restore":
-            p.add_argument("-R", "--revision", metavar="REV", help="Restore from a reachable historical commit (default: branch tip).")
+            p.add_argument("--revision", metavar="REV", help="Restore from a reachable historical commit (default: branch tip).")
         p.add_argument(
             "paths", nargs="*", metavar="PATH",
             help="Use paths relative to the current directory; use -- before leading hyphens.",

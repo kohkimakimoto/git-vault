@@ -9,7 +9,7 @@ git vault profiles add production -r "$RECIPIENT2"
 printf 'production\n' >.env
 printf 'second secret\n' >credentials
 git vault save -p production .env credentials
-git vault recipients add -p production "$RECIPIENT3" <"$KEY2"
+git vault recipients add -p production -i "$KEY2" -r "$RECIPIENT3"
 assert_eq "$(git vault recipients list -p production | wc -l | tr -d ' ')" 2
 for key in "$KEY2" "$KEY3"; do
     git vault restore -p production -a -f -i "$key"
@@ -19,12 +19,12 @@ done
 git show vault:default/files/.env >"$TEST_ROOT/unchanged"
 cmp "$TEST_ROOT/default-ciphertext" "$TEST_ROOT/unchanged"
 before="$(git rev-parse vault)"
-expect_exit 1 git vault recipients remove -p production -i "$KEY1" "$RECIPIENT2"
+expect_exit 1 git vault recipients remove -p production -i "$KEY1" -r "$RECIPIENT2"
 assert_eq "$(git rev-parse vault)" "$before"
-git vault recipients remove -p production -i "$KEY3" "$RECIPIENT2"
+git vault recipients remove -p production -i "$KEY3" -r "$RECIPIENT2"
 assert_eq "$(git vault recipients list -p production)" "$RECIPIENT3"
 git vault restore -p production -a -f -i "$KEY3"
 expect_exit 1 git vault restore -p production -a -f -i "$KEY2"
-expect_exit 1 git vault recipients remove -p production "$RECIPIENT3"
-expect_exit 1 git vault recipients add -p production "$RECIPIENT3"
-expect_exit 1 git vault recipients remove -p production "$RECIPIENT1"
+expect_exit 1 git vault recipients remove -p production -r "$RECIPIENT3"
+expect_exit 1 git vault recipients add -p production -r "$RECIPIENT3"
+expect_exit 1 git vault recipients remove -p production -r "$RECIPIENT1"

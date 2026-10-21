@@ -23,9 +23,11 @@ git vault remove -p production .env
 git vault profiles remove production
 assert_eq "$(git vault profiles list)" default
 
-git vault profiles add empty -r "$RECIPIENT1" -r "$RECIPIENT2"
-git vault recipients add -p empty "$RECIPIENT3" </dev/null
+sorted_lines() { printf '%s\n' "$@" | sort; }
+sorted_lines "$RECIPIENT1" "$RECIPIENT2" >"$TEST_ROOT/empty-recipients.txt"
+git vault profiles add empty -R "$TEST_ROOT/empty-recipients.txt"
+git vault recipients add -p empty -r "$RECIPIENT3"
 before="$(git rev-parse vault)"
 git vault save -p empty -a
-git vault restore -p empty -a </dev/null
+git vault restore -p empty -a
 assert_eq "$(git rev-parse vault)" "$before"

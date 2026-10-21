@@ -16,8 +16,8 @@ tree="$(git write-tree)"
 unset GIT_INDEX_FILE
 commit="$(git commit-tree "$tree" -p vault -m 'Corrupt ciphertext fixture')"
 git update-ref refs/heads/vault "$commit"
-expect_exit 1 git vault restore -a <"$KEY1"
+expect_exit 1 git vault restore -a -i - <"$KEY1"
 assert_absent first
 assert_absent second
-expect_exit 1 git vault recipients add "$RECIPIENT2" <"$KEY1"
+expect_exit 1 git vault recipients add -r "$RECIPIENT2" -i "$KEY1"
 assert_eq "$(git rev-parse vault)" "$commit"

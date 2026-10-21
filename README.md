@@ -128,42 +128,64 @@ If any registered source file is missing, the entire save fails.
 
 ## Private key input
 
-When `-i` is supplied, identity files are used and stdin is not read. Repeat `-i`
-to use multiple identity files. Otherwise git-vault reads identity contents from
-redirected stdin, or prompts without echo when stdin is a terminal.
+Identity is required only when decrypting (restore, or recipients add/remove when
+the profile has files). Resolve it as follows:
+
+1. `-i` / `--identity PATH` (at most once). Use `-i -` to read an identity from
+   stdin (same meaning as age). Overrides `vault.identity`.
+2. Otherwise `git config vault.identity` (a single path; see below).
+3. Otherwise the command fails. There is no implicit stdin read and no prompt.
 
 ```sh
-git vault restore .env < /path/to/identity
-cat /path/to/identity | git vault restore -a
-# Without -i or redirected stdin, enter a private key at the hidden prompt.
+git vault restore -i /path/to/identity .env
+git vault restore -i - .env < /path/to/identity
+cat /path/to/identity | git vault restore -a -i -
+git config --global vault.identity ~/.config/age/key.txt
 git vault restore .env
 ```
 
-Stdin accepts an age identity file, including comments and multiple keys.
-Interactive input accepts a single native age private key. Redirected and typed
-keys are held in a permission-restricted temporary identity file and cleaned up
-when the operation exits normally, fails, or is interrupted with Ctrl-C.
+`-i -` is read once per operation into a temporary file and reused for every
+decrypt in that operation. Do not combine `-i -` with `-R -`. Multiple native age
+secrets belong in one identity file (age's multi-line format), not repeated `-i`.
+
+### `vault.identity`
+
+Set a single default identity file path in Git config (not the key material):
+
+```ini
+[vault]
+	identity = ~/.config/age/key.txt
+```
+
+Exactly one path per selected scope. Paths must be absolute or start with `~`.
+git-vault uses the highest Git config scope that defines the key (`command` →
+`worktree` → `local` → `global` → `system`), including `include` / `includeIf`,
+and does not fall back to stdin if the configured path is missing.
 
 ## Recipients
 
 A recipient is who may use a profile's secrets (a person, bot, or role). Each
-recipient is represented by one age public key (`age...`), matching age's own
-wording. Labels describe the recipient; encryption and identity checks use the
-public key.
+recipient is a public key accepted by age (native `age...` / `age1pq1...`, or SSH
+keys such as `ssh-ed25519` / `ssh-rsa`, subject to age). Labels are git-vault
+metadata; encryption uses the public key. See age's documentation for supported
+key types.
 
-Each profile has its own recipient list:
+Each profile stores recipients as JSON at `<profile>/recipients`. CLI input uses
+`-r` / `-R` like age:
 
 ```sh
 git vault recipients list -p production
-git vault recipients add -p production -i /path/to/identity -l "deploy bot" age...
-git vault recipients remove -p production age... < /path/to/identity
+git vault recipients list -p production --json
+git vault recipients add -p production -i /path/to/identity -l "deploy bot" -r age...
+git vault recipients add -p production -i /path/to/identity -R ~/.ssh/id_ed25519.pub
+git vault recipients remove -p production -i /path/to/identity -r age...
+git vault init -R teammates.txt
 ```
 
-Optional `-l` / `--label` attaches a non-unique description (owner, purpose, and so
-on) when adding recipients via `init`, `profiles add`, or `recipients add`. Provide
-zero labels, or one label per key in the same order. Labels are metadata only;
-removal and matching use the public key. Labels cannot be changed later except by
-removing and re-adding the recipient.
+Optional `-l` / `--label` attaches a non-unique description when adding via
+`init`, `profiles add`, or `recipients add`. Provide zero labels, or one label per
+key across all `-r` / `-R` inputs in CLI order. Labels cannot be changed later
+except by removing and re-adding the recipient.
 
 `recipients add` and `recipients remove` do not only edit the public key list.
 When the profile has saved files, git-vault must **decrypt every ciphertext with a
@@ -193,8 +215,7 @@ routine restore when a narrower key is enough. Removing it from a profile still
 leaves historical commits decryptable by anyone who held it, as with any key
 removal.
 
-The initial version supports native age public keys (`age...`), not SSH keys or
-plugins. Removing a public key does not revoke access to historical ciphertext.
+Removing a public key does not revoke access to historical ciphertext.
 
 ## Commit messages
 
@@ -207,7 +228,7 @@ git vault save -F /path/to/message.txt .env
 ```
 
 Repeat `-m` to separate paragraphs. `-F` reads a UTF-8 file; `-F -` is not supported
-because stdin is reserved for private key input. Messages cannot be empty.
+because `-F -` is not supported. Messages cannot be empty.
 
 When omitted, messages are generated with a `git-vault:` prefix:
 
@@ -257,7 +278,7 @@ After cloning the application branch, create a local vault branch from the remot
 ```sh
 git fetch origin
 git branch --track vault origin/vault
-git vault restore -a < /path/to/identity
+git vault restore -a -i /path/to/identity
 ```
 
 This does not change your checkout. Skip the branch creation if local `vault`
@@ -281,7 +302,7 @@ Merge and squash commit messages need no special prefix or trailer.
 ## Command reference
 
 Options follow the operation: `git vault save -p production .env`, or
-`git vault recipients add -p production age...`.
+`git vault recipients add -p production -r age...`.
 
 Paths are relative to the current directory; `-a` uses stored repository-relative
 paths. Use `--` before file names beginning with `-`. Force does not bypass symlink,
@@ -292,16 +313,17 @@ generated.
 ### `init`
 
 ```sh
-git vault init [options] -r KEY [-r KEY ...] [-l TEXT ...]
+git vault init [options] [-r KEY | -R PATH]... [-l TEXT ...]
 ```
 
-Initialize an independent vault branch with a `default` profile. The branch must not already exist. This command creates the branch itself and does not accept `-n` or `-B`.
+Initialize an independent vault branch with a `default` profile. The branch must not already exist. This command creates the branch itself and does not accept `-n` or `-B`. At least one `-r` or `-R` is required.
 
 | Option | Purpose |
 | --- | --- |
 | `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
-| `-r`, `--recipient KEY` | Required native age public key; repeat for multiple keys. |
-| `-l`, `--label TEXT` | Optional recipient label; repeat once per `-r` in the same order, or omit. |
+| `-r`, `--recipient KEY` | One public key accepted by age. Mutually exclusive with `-R`. |
+| `-R`, `--recipients-file PATH` | One recipients file (age `-R` format, multiple lines OK); `-` for stdin. Mutually exclusive with `-r`. |
+| `-l`, `--label TEXT` | Optional label; zero, or one per key (`-r`) / per `-R` line. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
 | `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Mutually exclusive with `-m`. |
 | `-h`, `--help` | Show help. |
@@ -322,16 +344,17 @@ List all profiles in the selected branch.
 ### `profiles add`
 
 ```sh
-git vault profiles add [options] NAME -r KEY [-r KEY ...] [-l TEXT ...]
+git vault profiles add [options] NAME [-r KEY | -R PATH]... [-l TEXT ...]
 ```
 
-Create the profile named `NAME` with its own recipients and no files. The profile must not already exist. Profile names begin with an ASCII letter or digit and contain only letters, digits, `.`, `_`, and `-`.
+Create the profile named `NAME` with its own recipients and no files. The profile must not already exist. Profile names begin with an ASCII letter or digit and contain only letters, digits, `.`, `_`, and `-`. At least one `-r` or `-R` is required.
 
 | Option | Purpose |
 | --- | --- |
 | `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
-| `-r`, `--recipient KEY` | Required native age public key; repeat for multiple keys. |
-| `-l`, `--label TEXT` | Optional recipient label; repeat once per `-r` in the same order, or omit. |
+| `-r`, `--recipient KEY` | One public key accepted by age. Mutually exclusive with `-R`. |
+| `-R`, `--recipients-file PATH` | One recipients file (age `-R` format, multiple lines OK); `-` for stdin. Mutually exclusive with `-r`. |
+| `-l`, `--label TEXT` | Optional label; zero, or one per key (`-r`) / per `-R` line. |
 | `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
@@ -361,7 +384,8 @@ Remove the profile named `NAME`. It must be empty and cannot be `default`.
 git vault recipients list [options]
 ```
 
-List recipients for the selected profile. Each line is `KEY` or `KEY LABEL`, matching the stored recipients file.
+List recipients for the selected profile. Default lines are `KEY` or `KEY  LABEL`.
+`--json` prints the canonical stored JSON.
 
 | Option | Purpose |
 | --- | --- |
@@ -372,17 +396,19 @@ List recipients for the selected profile. Each line is `KEY` or `KEY LABEL`, mat
 ### `recipients add`
 
 ```sh
-git vault recipients add [options] [-l TEXT ...] KEY...
+git vault recipients add [options] [-r KEY | -R PATH]... [-l TEXT ...]
 ```
 
-Add the public keys specified by `KEY...`. When the profile has files, decrypt each ciphertext and re-encrypt it for the updated public keys in one commit. Existing public keys are rejected. A private identity is needed for that decrypt step unless the profile is empty.
+Add public keys from `-r` / `-R`. When the profile has files, decrypt each ciphertext and re-encrypt it for the updated public keys in one commit. Existing public keys are rejected. A private identity is needed for that decrypt step unless the profile is empty.
 
 | Option | Purpose |
 | --- | --- |
 | `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
 | `-p`, `--profile NAME` | Target profile (default: `default`). |
-| `-i`, `--identity PATH` | Private identity used to decrypt existing files before re-encryption; repeat for multiple files. If omitted, read stdin or prompt without echo. Not needed when the profile has no files. |
-| `-l`, `--label TEXT` | Optional recipient label; repeat once per `KEY` in the same order, or omit. |
+| `-r`, `--recipient KEY` | One public key to add. Mutually exclusive with `-R`. |
+| `-R`, `--recipients-file PATH` | One recipients file; `-` for stdin. Mutually exclusive with `-r`. |
+| `-i`, `--identity PATH` | One identity for re-encryption. Use `-i -` for stdin, or `vault.identity`. Not needed when the profile has no files. |
+| `-l`, `--label TEXT` | Optional label; zero, or one per key / per `-R` line. |
 | `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
@@ -392,16 +418,18 @@ Add the public keys specified by `KEY...`. When the profile has files, decrypt e
 ### `recipients remove`
 
 ```sh
-git vault recipients remove [options] KEY...
+git vault recipients remove [options] [-r KEY | -R PATH]...
 ```
 
-Remove the public keys specified by `KEY...`. When the profile has files, decrypt each ciphertext and re-encrypt it for the remaining public keys in one commit. Unknown keys and removal of the last public key are rejected. A private identity is needed for that decrypt step unless the profile is empty. Past commits are unchanged.
+Remove public keys from `-r` / `-R`. When the profile has files, decrypt each ciphertext and re-encrypt it for the remaining public keys in one commit. Unknown keys and removal of the last public key are rejected. A private identity is needed for that decrypt step unless the profile is empty. Past commits are unchanged.
 
 | Option | Purpose |
 | --- | --- |
 | `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
 | `-p`, `--profile NAME` | Target profile (default: `default`). |
-| `-i`, `--identity PATH` | Private identity used to decrypt existing files before re-encryption; repeat for multiple files. If omitted, read stdin or prompt without echo. Not needed when the profile has no files. |
+| `-r`, `--recipient KEY` | One public key to remove. Mutually exclusive with `-R`. |
+| `-R`, `--recipients-file PATH` | One recipients file of keys to remove; `-` for stdin. Mutually exclusive with `-r`. |
+| `-i`, `--identity PATH` | One identity for re-encryption. Use `-i -` for stdin, or `vault.identity`. Not needed when the profile has no files. |
 | `-n`, `--new-branch` | Create the explicitly named `-b` branch; fail if it already exists. |
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Mutually exclusive with `-F`. |
@@ -456,10 +484,10 @@ Decrypt files into the working tree. Without `-f`, existing files and tracked pa
 | --- | --- |
 | `-b`, `--branch NAME` | Target local branch (default: `vault`). Must exist unless explicitly created. |
 | `-p`, `--profile NAME` | Target profile (default: `default`). |
-| `-i`, `--identity PATH` | Private identity file; repeat for multiple files. If omitted, read stdin or prompt without echo. |
+| `-i`, `--identity PATH` | One identity file. Use `-i -` for stdin, or omit and use `vault.identity`. |
 | `-a`, `--all` | Restore all saved paths in the selected profile and revision; mutually exclusive with explicit paths. |
 | `-f`, `--force` | Overwrite existing or tracked files, including uncommitted working-tree changes; leave the index unchanged. |
-| `-R`, `--revision REV` | Restore from a commit reachable from the target branch (default: branch tip). |
+| `--revision REV` | Restore from a commit reachable from the target branch (default: branch tip). |
 | `-h`, `--help` | Show help. |
 
 ### `remove`
@@ -486,7 +514,7 @@ Remove the specified paths from the current saved snapshot in one commit. Keep w
 git vault version
 ```
 
-Print the version hardcoded in the script, such as `0.7.0`. No repository or age
+Print the version hardcoded in the script, such as `0.8.0`. No repository or age
 installation is required.
 
 | Option | Purpose |
@@ -539,10 +567,9 @@ production/
 ```
 
 Every file under `files/` is binary age ciphertext, regardless of its name. Original
-relative paths are preserved without extra extensions. The recipients file lists
-public keys, one per line as `KEY` or `KEY LABEL` (first space separates an
-optional label). File names, sizes, profile names, labels, and Git metadata remain
-visible.
+relative paths are preserved without extra extensions. The recipients file is
+canonical JSON (`version` 1) with `key` and optional `label` fields. File names,
+sizes, profile names, labels, and Git metadata remain visible.
 
 This layout and the `profiles` / `--profile` CLI replace the previous section
 format and commands. Old layouts and options are not supported; no migration is

@@ -17,7 +17,7 @@ expect_exit 1 git vault save -b failed-change -n missing
 expect_exit 1 git show-ref --verify --quiet refs/heads/failed-change
 expect_exit 1 git vault init -b invalid-keys -r "age$(printf '%059d' 0 | tr 0 q)"
 expect_exit 1 git show-ref --verify --quiet refs/heads/invalid-keys
-expect_exit 1 git vault restore -R main -f -i "$KEY1" .env
+expect_exit 1 git vault restore --revision main -f -i "$KEY1" .env
 assert_app_unchanged
 
 # Normal merge commit messages do not need a format marker.

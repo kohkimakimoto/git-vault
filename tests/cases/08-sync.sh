@@ -13,7 +13,7 @@ for name in clone-a clone-b; do
     git config user.name 'Vault Test'
     git config user.email vault@example.invalid
     git branch --track vault origin/vault
-    git vault restore -a <"$KEY1"
+    git vault restore -a -i - <"$KEY1"
     assert_eq "$(cat .env)" first
 done
 cd "$TEST_ROOT/clone-a"
