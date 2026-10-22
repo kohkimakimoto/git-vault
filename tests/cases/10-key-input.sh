@@ -19,9 +19,10 @@ expect_exit 1 git vault restore -i - .env <"$TEST_ROOT/bad-key"
 if grep -Fq PRIVATE-MALFORMED-SECRET "$TEST_ROOT/last.stderr"; then
     fail 'Key contents leaked into diagnostics'
 fi
-[[ "$(cat "$TEST_ROOT/last.stderr")" == *'Check the identity, ciphertext, and required age plugins.'* ]] || fail 'Missing safe decryption guidance'
+[[ "$(cat "$TEST_ROOT/last.stderr")" == *'Invalid identity file.'* ]] || fail 'Missing identity validation'
 assert_absent .env
 expect_exit 1 git vault restore -i "$KEY2" .env
+[[ "$(cat "$TEST_ROOT/last.stderr")" == *'Check the identity, ciphertext, and required age plugins.'* ]] || fail 'Missing safe decryption guidance'
 assert_absent .env
 # vault.identity default when -i is omitted.
 git config vault.identity "$KEY3"

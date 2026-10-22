@@ -156,7 +156,7 @@ git config vault.identity "$PWD/.git/vaultkey.age"
 git vault restore .env
 ```
 
-`-i -` is read once per operation into a temporary file and reused for every decrypt in that operation. Do not combine `-i -` with `-R -`. Multiple native age secrets belong in one identity file (age's multi-line format). Multiple SSH private key files cannot be supplied in a single operation.
+`-i -` is read once per operation into a temporary file and reused for every decrypt in that operation. Do not combine `-i -` with `-R -`. Multiple age secrets belong in one identity file (age's multi-line format).
 
 ### Passphrase-protected identity files
 
@@ -188,7 +188,7 @@ This writes into the repository's Git config (typically `.git/config`), for exam
 
 ## Recipients
 
-A recipient is who may use a profile's secrets (a person, bot, or role). Each recipient is a public key (for example `age...` / `age1pq1...`, or SSH keys such as `ssh-ed25519` / `ssh-rsa`). Labels are git-vault metadata; encryption uses the public key. See age's documentation for supported key types.
+A recipient is who may use a profile's secrets (a person, bot, or role). Each recipient is an age public key (for example `age1...`). Labels are git-vault metadata; encryption uses the public key.
 
 Each profile stores recipients as JSON at `<profile>/recipients.json`. CLI input uses `-r` / `-R`:
 
@@ -203,7 +203,7 @@ git vault recipients list -p production --json
 git vault recipients add -p production -l "deploy bot" -r age...
 
 # Add public keys from a recipients file
-git vault recipients add -p production -R ~/.ssh/id_ed25519.pub
+git vault recipients add -p production -R teammates.txt
 
 # Remove a public key (re-encrypts saved files when needed)
 git vault recipients remove -p production -r age...
@@ -653,7 +653,7 @@ bash tests/cases/03-recipients.sh
 
 `tests/common.sh` contains temporary-repository setup and small assertions. Each scenario creates disposable keys and repositories, isolates personal Git configuration, and cleans up afterward. Tests cover round trips, profiles, recipient rotation and labels, working branches, messages, force handling, paths, historical restore, linked worktrees, remote divergence, failure atomicity, and agent skill output and installation.
 
-There is no test framework or Python package dependency. Bash, Git, age, age-keygen, ssh-keygen, and Python (for git-vault itself) are required. The stdin identity test restores multiple files in one operation to verify that the identity is read once and reused. Tests never import git-vault's implementation.
+There is no test framework or Python package dependency. Bash, Git, age, age-keygen, and Python (for git-vault itself) are required. The stdin identity test restores multiple files in one operation to verify that the identity is read once and reused. Tests never import git-vault's implementation.
 
 ## Author
 

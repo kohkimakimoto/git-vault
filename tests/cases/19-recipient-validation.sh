@@ -2,10 +2,14 @@
 # Recipient input constraints and canonical JSON are enforced through the CLI.
 source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
 git vault init -r "$RECIPIENT1"
-# Public recipient validation preserves age's actionable diagnostic.
-expect_exit 1 age --encrypt -r invalid-public-recipient </dev/null
+# Non-age public keys are rejected before calling age.
+expect_exit 2 git vault init -b invalid-public -r invalid-public-recipient
+[[ "$(cat "$TEST_ROOT/last.stderr")" == *'Invalid public key.'* ]] || fail 'Non-age public key was accepted'
+# age-shaped but invalid recipients still preserve age's actionable diagnostic.
+BAD_AGE='age1invalidrecipient000000000000000000000000000000000000000'
+expect_exit 1 age --encrypt -r "$BAD_AGE" </dev/null
 cp "$TEST_ROOT/last.stderr" "$TEST_ROOT/age-error"
-expect_exit 1 git vault init -b invalid-public -r invalid-public-recipient
+expect_exit 1 git vault init -b invalid-age -r "$BAD_AGE"
 [[ "$(cat "$TEST_ROOT/last.stderr")" == *"$(cat "$TEST_ROOT/age-error")"* ]] || fail 'age recipient diagnostic was suppressed'
 expect_exit 2 git vault init -b missing
 expect_exit 2 git vault init -b mixed -r "$RECIPIENT1" -R "$KEY1"
@@ -78,10 +82,10 @@ for fixture in "$TEST_ROOT"/invalid-*.json; do
     expect_exit 1 git vault recipients list -b invalid-json
     [[ "$(cat "$TEST_ROOT/last.stderr")" == *'Invalid recipients file'* ]] || fail "Malformed JSON was not rejected: $fixture"
 done
-# age -R can ignore unsupported SSH keys; git-vault must validate every key.
-command -v ssh-keygen >/dev/null || { echo 'Missing test command: ssh-keygen' >&2; exit 1; }
-ssh-keygen -t ecdsa -b 256 -N '' -f "$TEST_ROOT/unsupported" -q
-printf '%s\n' "$RECIPIENT1" >"$TEST_ROOT/unsupported.txt"
-cat "$TEST_ROOT/unsupported.pub" >>"$TEST_ROOT/unsupported.txt"
-expect_exit 1 git vault init -b unsupported -R "$TEST_ROOT/unsupported.txt"
+# -R - reads recipients from stdin.
+printf '%s\n' "$RECIPIENT2" | git vault init -b from-stdin -R -
+assert_eq "$(git vault recipients list -b from-stdin)" "$RECIPIENT2"
+# Reject non-age public keys before calling age.
+printf '%s\n' "$RECIPIENT1" 'not-an-age-recipient' >"$TEST_ROOT/unsupported.txt"
+expect_exit 2 git vault init -b unsupported -R "$TEST_ROOT/unsupported.txt"
 expect_exit 1 git show-ref --verify --quiet refs/heads/unsupported

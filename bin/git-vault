@@ -95,7 +95,7 @@ git vault save -p production -b vault-update-secrets -- credentials.json
 AGE-SECRET-KEY-14S4CNP040N60QYYWSMGQ2225PSWKSHRCFRSW6954MY2XHC2T9U4QNV05FQ
 ```
 
-The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` comment is the matching public key. Use that public key with `-r` / recipients. Use the identity file with `-i PATH` to decrypt. To read an identity from stdin, use `-i -`. Optionally set repository-local `git config vault.identity` to an absolute path when `-i` is omitted. Prefer one passphrase-protected age identity per person per clone (`age-keygen | age -p > .git/vaultkey.age`, then `git config vault.identity "$PWD/.git/vaultkey.age"`), so the raw secret is not stored in plaintext and deleting the clone discards that working copy's key. Hand only the public key to an administrator to register on the profiles the person needs. Avoid a user-global `vault.identity` or one private key reused across repositories. For CI, use a separate plaintext identity without a passphrase. Multiple native age secrets belong in one identity file. Do not combine `-i -` with `-R -`. Never read, print, or pass the private key in conversation or command arguments.
+The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` comment is the matching public key. Use that public key with `-r` / recipients. Use the identity file with `-i PATH` to decrypt. To read an identity from stdin, use `-i -`. Optionally set repository-local `git config vault.identity` to an absolute path when `-i` is omitted. Prefer one passphrase-protected age identity per person per clone (`age-keygen | age -p > .git/vaultkey.age`, then `git config vault.identity "$PWD/.git/vaultkey.age"`), so the raw secret is not stored in plaintext and deleting the clone discards that working copy's key. Hand only the public key to an administrator to register on the profiles the person needs. Avoid a user-global `vault.identity` or one private key reused across repositories. For CI, use a separate plaintext identity without a passphrase. Multiple age secrets belong in one identity file. Do not combine `-i -` with `-R -`. Never read, print, or pass the private key in conversation or command arguments.
 
 ## Restore files
 
@@ -128,11 +128,11 @@ Only initialize when the task calls for a new vault. `init` writes a root `READM
 git branch --track vault origin/vault
 ```
 
-For a new vault or profile, obtain the intended public keys from the user or project context. Key types follow age (`age...`, SSH public keys, etc.).
+For a new vault or profile, obtain the intended age public keys from the user or project context.
 
 ```sh
 git vault init -r age...
-git vault init -R ~/.ssh/id_ed25519.pub -l laptop
+git vault init -R teammates.txt -l laptop
 git vault profiles add production -r age...
 git vault recipients add -p production -i /path/to/identity -r age...
 git vault recipients remove -p production -i /path/to/identity -r age...
@@ -246,12 +246,16 @@ def normalize_key(key):
     if not isinstance(key, str):
         raise VaultError("Public keys must be strings.", 2)
     key = key.strip()
-    if not key or "\0" in key or "\n" in key or "\r" in key:
+    if not key or "\0" in key or "\n" in key or "\r" in key or not key.startswith("age"):
         raise VaultError("Invalid public key.", 2)
-    parts = key.split()
-    if parts and parts[0].startswith("ssh-") and len(parts) >= 2:
-        return f"{parts[0]} {parts[1]}"
     return key
+
+
+def ensure_age_identity(path):
+    with open(path, "rb") as handle:
+        data = handle.read()
+    if b"AGE-SECRET-KEY-" not in data:
+        raise VaultError("Invalid identity file.")
 
 
 def pair_recipients(keys, labels):
@@ -495,8 +499,10 @@ def identities(repo, path):
             temporary = ensure_identity_temp(temporary)
             unlocked = Path(temporary.name) / "identity.plain"
             unlock_passphrase_identity(source, unlocked)
+            ensure_age_identity(unlocked)
             yield [str(unlocked)]
         else:
+            ensure_age_identity(source)
             yield [str(source)]
     finally:
         if temporary is not None:
