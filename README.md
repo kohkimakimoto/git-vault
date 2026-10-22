@@ -37,31 +37,28 @@ Place [`bin/git-vault`](bin/git-vault) somewhere on your `PATH` and make it exec
 
 ## Quick start
 
-From the root of your application repository, create a **passphrase-protected** age identity and point `vault.identity` at it (see [Recommended practice and limits](#recommended-practice-and-limits)):
+This example encrypts and saves a `.env` file that holds application secrets. From the root of your application repository, create an age identity. A passphrase-protected identity under the local `.git` directory is recommended; see [Recommended practice and limits](#recommended-practice-and-limits).
 
 ```sh
-# Generate a passphrase-protected identity inside the local Git directory
-# age-keygen prints the public key; age -p prompts for a passphrase
+# Generate an identity inside the local Git directory
 age-keygen | age -p > .git/vaultkey.age
+```
 
-# change the file permissions so only the owner can read/write it
+`age -p` prompts for a passphrase. `age-keygen` also prints the public key like the following — note it for later:
+
+```
+Public key: age1x3cxwvfsdsjkjwrp9egnvaqanveajcl86jswgnvups2he7q6ldrqprv2rr
+```
+
+After generating the identity, point `vault.identity` at it and initialize the vault:
+
+```sh
+# Change the file permissions so only the owner can read/write it
 chmod 600 .git/vaultkey.age
 
 # Configure git-vault to use that identity by default for this repository
 git config vault.identity "$PWD/.git/vaultkey.age"
-```
 
-`age-keygen` alone would write a plaintext identity like this (and also print the public key):
-
-```
-# created: 2026-10-17T21:53:43+09:00
-# public key: age19438ccrwjqpmjhjpvp40aclyjnpllhgru62uak84knzs5n4k3y6q6ej2tq
-AGE-SECRET-KEY-14S4CNP040N60QYYWSMGQ2225PSWKSHRCFRSW6954MY2XHC2T9U4QNV05FQ
-```
-
-The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` comment is the matching public key. Pass that public key to `-r` when you initialize a vault or add recipients. With `age-keygen | age -p`, the file on disk is passphrase-encrypted (age's `.age` form); use a strong passphrase. Keep the identity file private; git-vault stores public keys only, never the private key.
-
-```sh
 # Create the orphan vault branch with the given public key
 git vault init -r age...
 
@@ -75,7 +72,7 @@ git vault list
 git push origin vault
 ```
 
-`init` creates an orphan `vault` branch whose tree holds encrypted files and the public keys used for encryption, plus a short `README.md` at the branch root. Every update adds a commit to that branch. Your current checkout, application branch, and index are left alone. There is no need to switch to the vault branch.
+`init` creates an orphan `vault` branch whose tree holds encrypted files and the public keys used for encryption. Every update adds a commit to that branch. Your current checkout, application branch, and index are left alone. There is no need to switch to the vault branch.
 
 `save` keeps the original plaintext file. **You are responsible for excluding plaintext from Git**, for example with your own `.gitignore`. git-vault does not inspect or modify ignore settings.
 
@@ -93,7 +90,7 @@ git vault restore -f .env
 
 ## Profiles
 
-Profiles group files and recipients in the same vault branch. `init` creates a `default` profile implicitly.
+Profiles group files and [recipients](#recipients) (public keys) in the same vault branch. [`init`](#init) creates a `default` profile implicitly.
 
 ```sh
 # Create a production profile with its own public key
@@ -109,7 +106,7 @@ git vault list -p production
 git vault profiles list
 
 # Restore .env from production, overwriting if it already exists
-git vault restore -p production -f -i /path/to/identity .env
+git vault restore -p production -f .env
 ```
 
 The same path can be saved in multiple profiles. Restoring different profiles writes to the same working-tree path. `default` is selected when `-p` is omitted.
@@ -119,7 +116,7 @@ The same path can be saved in multiple profiles. Restoring different profiles wr
 git vault save -p production -a
 
 # Restore every file in this profile.
-git vault restore -p production -a -f -i /path/to/identity
+git vault restore -p production -a -f
 
 # Delete working-tree plaintext for saved paths (vault unchanged)
 git vault clean -p production -a
@@ -203,13 +200,13 @@ git vault recipients list -p production
 git vault recipients list -p production --json
 
 # Add a public key with a label (re-encrypts saved files when needed)
-git vault recipients add -p production -i /path/to/identity -l "deploy bot" -r age...
+git vault recipients add -p production -l "deploy bot" -r age...
 
 # Add public keys from a recipients file
-git vault recipients add -p production -i /path/to/identity -R ~/.ssh/id_ed25519.pub
+git vault recipients add -p production -R ~/.ssh/id_ed25519.pub
 
 # Remove a public key (re-encrypts saved files when needed)
-git vault recipients remove -p production -i /path/to/identity -r age...
+git vault recipients remove -p production -r age...
 
 # Initialize a vault from a recipients file instead of -r
 git vault init -R teammates.txt
@@ -289,7 +286,7 @@ git fetch origin
 git branch --track vault origin/vault
 
 # Restore every saved file into the working tree
-git vault restore -a -i /path/to/identity
+git vault restore -a
 ```
 
 This does not change your checkout. Skip the branch creation if local `vault` already exists. To fast-forward an existing local vault branch from the remote:
