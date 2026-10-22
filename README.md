@@ -164,10 +164,6 @@ chmod 600 .git/vaultkey.txt
 git config vault.identity "$PWD/.git/vaultkey.txt"
 ```
 
-When the identity file is passphrase-protected, git-vault unlocks it **once per operation** (age reads the passphrase from the terminal) and reuses the unlocked key for every decrypt in that operation—for example `restore -a` or `recipients add` when the profile has many files. The unlocked key lives only in a temporary file for the duration of the command. Non-interactive environments without a terminal cannot unlock these identities; use a plaintext identity file there, or unlock ahead of time by other means.
-
-The raw `AGE-SECRET-KEY-...` form remains supported and needs no passphrase prompt.
-
 ### `vault.identity`
 
 Set a default identity file path with `git config` (the path to the file, not the key material). The value must be an **absolute path** or start with `~`. Prefer a **repository-local** setting. The recommended layout is described under [Recommended practice and limits](#recommended-practice-and-limits).
