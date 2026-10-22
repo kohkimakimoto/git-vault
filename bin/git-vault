@@ -15,7 +15,7 @@ import subprocess
 import sys
 import tempfile
 
-VERSION = "0.9.0"
+VERSION = "0.10.0"
 
 DEFAULT_SKILL_PATH = ".agents/skills/git-vault/SKILL.md"
 
@@ -85,7 +85,7 @@ git vault save -p production -b vault-update-secrets -- credentials.json
 AGE-SECRET-KEY-14S4CNP040N60QYYWSMGQ2225PSWKSHRCFRSW6954MY2XHC2T9U4QNV05FQ
 ```
 
-The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` comment is the matching public key. Use that public key with `-r` / recipients. Use the identity file with `-i PATH` to decrypt. To read an identity from stdin, use `-i -`. Optionally set repository-local `git config vault.identity` to an absolute path when `-i` is omitted. Prefer one age identity per person per clone, stored as `.git/vaultkey.txt` in that clone (`git config vault.identity "$PWD/.git/vaultkey.txt"` from the repo root), so deleting the clone discards that working copy's key. Avoid a user-global `vault.identity` or one private key reused across repositories. Multiple native age secrets belong in one identity file. Do not combine `-i -` with `-R -`. Never read, print, or pass the private key in conversation or command arguments.
+The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` comment is the matching public key. Use that public key with `-r` / recipients. Use the identity file with `-i PATH` to decrypt. To read an identity from stdin, use `-i -`. Optionally set repository-local `git config vault.identity` to an absolute path when `-i` is omitted. Prefer one age identity per person per clone, stored as `.git/vaultkey.txt` in that clone (`git config vault.identity "$PWD/.git/vaultkey.txt"` from the repo root), so deleting the clone discards that working copy's key. Avoid a user-global `vault.identity` or one private key reused across repositories. Multiple native age secrets belong in one identity file. Do not combine `-i -` with `-R -`. A passphrase-protected age identity (`age-keygen | age -p > key.age`) is supported: git-vault unlocks it once per operation via the terminal and reuses the unlocked key for every decrypt in that operation. Never read, print, or pass the private key in conversation or command arguments.
 
 ## Restore files
 
@@ -406,6 +406,45 @@ def vault_identity_path(repo):
     return values[0]
 
 
+AGE_ENCRYPTED_PREFIX = b"age-encryption.org/"
+AGE_ARMOR_PREFIX = b"-----BEGIN AGE ENCRYPTED FILE-----"
+
+
+def identity_is_passphrase_encrypted(path):
+    with open(path, "rb") as handle:
+        head = handle.read(max(len(AGE_ENCRYPTED_PREFIX), len(AGE_ARMOR_PREFIX)))
+    return head.startswith(AGE_ENCRYPTED_PREFIX) or head.startswith(AGE_ARMOR_PREFIX)
+
+
+def ensure_identity_temp(temporary):
+    if temporary is not None:
+        return temporary
+    temporary = tempfile.TemporaryDirectory(prefix="git-vault-key-")
+    os.chmod(temporary.name, 0o700)
+    return temporary
+
+
+def unlock_passphrase_identity(encrypted_path, destination):
+    # age reads the passphrase from /dev/tty when stdin is not a terminal.
+    result = subprocess.run(
+        ["age", "--decrypt", "-o", str(destination), str(encrypted_path)],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode == 0:
+        os.chmod(destination, 0o600)
+        return
+    detail = result.stderr.decode("utf-8", "replace").strip()
+    if "AGE-SECRET-KEY-" in detail:
+        detail = ""
+    raise VaultError(
+        detail
+        or "Failed to unlock identity file. Check the passphrase and that the file is a passphrase-protected age identity."
+    )
+
+
 @contextmanager
 def identities(repo, path):
     temporary = None
@@ -415,25 +454,30 @@ def identities(repo, path):
                 content = sys.stdin.buffer.read()
                 if not content.strip():
                     raise VaultError("No private key supplied on stdin.")
-                temporary = tempfile.TemporaryDirectory(prefix="git-vault-key-")
-                os.chmod(temporary.name, 0o700)
-                target = Path(temporary.name) / "identity"
-                fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                temporary = ensure_identity_temp(temporary)
+                source = Path(temporary.name) / "identity"
+                fd = os.open(source, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                 with os.fdopen(fd, "wb") as stream:
                     stream.write(content)
-                yield [str(target)]
-                return
-            file = expand_identity_file(path).absolute()
-            if not file.is_file():
-                raise VaultError(f"Identity file not found: {path}")
-            yield [str(file)]
-            return
-        config_path = vault_identity_path(repo)
-        if config_path is None:
-            raise VaultError("No identity specified. Use -i or set vault.identity.")
-        if not Path(config_path).is_file():
-            raise VaultError(f"Identity file not found: {config_path}")
-        yield [config_path]
+            else:
+                source = expand_identity_file(path).absolute()
+                if not source.is_file():
+                    raise VaultError(f"Identity file not found: {path}")
+        else:
+            config_path = vault_identity_path(repo)
+            if config_path is None:
+                raise VaultError("No identity specified. Use -i or set vault.identity.")
+            source = Path(config_path)
+            if not source.is_file():
+                raise VaultError(f"Identity file not found: {config_path}")
+
+        if identity_is_passphrase_encrypted(source):
+            temporary = ensure_identity_temp(temporary)
+            unlocked = Path(temporary.name) / "identity.plain"
+            unlock_passphrase_identity(source, unlocked)
+            yield [str(unlocked)]
+        else:
+            yield [str(source)]
     finally:
         if temporary is not None:
             temporary.cleanup()
