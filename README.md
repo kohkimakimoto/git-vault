@@ -37,15 +37,17 @@ Place [`bin/git-vault`](bin/git-vault) somewhere on your `PATH` and make it exec
 
 ## Quick start
 
-From the root of your application repository, create a **passphrase-protected** age identity for this clone and point `vault.identity` at it (see [Recommended practice and limits](#recommended-practice-and-limits)):
+From the root of your application repository, create a **passphrase-protected** age identity and point `vault.identity` at it (see [Recommended practice and limits](#recommended-practice-and-limits)):
 
 ```sh
-# Generate a passphrase-protected identity inside the local Git directory (not pushed)
+# Generate a passphrase-protected identity inside the local Git directory
 # age-keygen prints the public key; age -p prompts for a passphrase
 age-keygen | age -p > .git/vaultkey.age
+
+# change the file permissions so only the owner can read/write it
 chmod 600 .git/vaultkey.age
 
-# Absolute path via $PWD (required by vault.identity)
+# Configure git-vault to use that identity by default for this repository
 git config vault.identity "$PWD/.git/vaultkey.age"
 ```
 
