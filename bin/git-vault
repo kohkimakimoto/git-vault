@@ -19,6 +19,16 @@ VERSION = "0.10.0"
 
 DEFAULT_SKILL_PATH = ".agents/skills/git-vault/SKILL.md"
 
+VAULT_README = """# Vault branch
+
+This branch is managed by [git-vault](https://github.com/kohkimakimoto/git-vault).
+It is an orphan branch used only to store encrypted secret files and the recipient public keys used to encrypt them.
+
+Do not put application code here. Use `git vault` to read and update this branch; editing its contents by hand can break the vault.
+"""
+
+VAULT_README_NAME = "README.md"
+
 SKILL_CONTENT = """---
 name: git-vault
 description: Save and restore encrypted project files with git-vault, including profiles, recipients, and working branches for pull requests. Use when a project uses git-vault or the user asks to manage files with git vault.
@@ -46,7 +56,7 @@ If the command exists but fails, inspect the error and distinguish a missing ins
 
 ## Choose the target
 
-The default local branch is `vault` and the default profile is `default`. Each profile is a root directory in that branch, with public keys at `<profile>/recipients.json` and ciphertext at `<profile>/files/<original-path>`. A recipient is who may use the secrets; each is one age public key. Profiles group files and recipients within the same branch. Before updating an existing vault, inspect its profiles, saved paths, and public keys:
+The default local branch is `vault` and the default profile is `default`. Each profile is a root directory in that branch, with public keys at `<profile>/recipients.json` and ciphertext at `<profile>/files/<original-path>`. The branch root also has a `README.md` explaining the vault; do not treat it as application code. A recipient is who may use the secrets; each is one age public key. Profiles group files and recipients within the same branch. Before updating an existing vault, inspect its profiles, saved paths, and public keys:
 
 ```sh
 git vault profiles list
@@ -112,7 +122,7 @@ Prefer lasting `restore` for day-to-day development. For short-lived access (for
 
 ## Initialize, organize, and rotate recipients
 
-Only initialize when the task calls for a new vault. If `origin/vault` already exists, use that history instead of creating an independent vault:
+Only initialize when the task calls for a new vault. `init` writes a root `README.md` on the vault branch; do not hand-edit vault trees. If `origin/vault` already exists, use that history instead of creating an independent vault:
 
 ```sh
 git branch --track vault origin/vault
@@ -192,7 +202,7 @@ def run(command, data=None, cwd=None, check=True, private=False):
 
 
 def valid_profile(name):
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name):
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name) or name == VAULT_README_NAME:
         raise VaultError(f"Invalid profile name: {name}", 2)
     return name
 
@@ -578,6 +588,8 @@ class Repository:
                 raise VaultError(f"Unsupported vault tree entry: {name}")
             parts = name.split("/")
             if len(parts) < 2:
+                if name == VAULT_README_NAME:
+                    continue
                 raise VaultError(f"Not a vault tree: unexpected entry {name}")
             profile_name = valid_profile(parts[0])
             profile = profiles.setdefault(profile_name, Profile([], {}))
@@ -609,7 +621,7 @@ class Repository:
         return profiles
 
     def tree(self, profiles):
-        flat = {}
+        flat = {VAULT_README_NAME: self.hash_blob(VAULT_README.encode())}
         for name, profile in profiles.items():
             base = f"{name}/"
             flat[base + "recipients.json"] = self.hash_blob(dump_recipients_json(profile.recipients).encode())

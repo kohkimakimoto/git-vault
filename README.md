@@ -73,7 +73,7 @@ git vault list
 git push origin vault
 ```
 
-`init` creates an orphan `vault` branch whose tree holds encrypted files and the public keys used for encryption. Every update adds a commit to that branch. Your current checkout, application branch, and index are left alone. There is no need to switch to the vault branch.
+`init` creates an orphan `vault` branch whose tree holds encrypted files and the public keys used for encryption, plus a short `README.md` at the branch root. Every update adds a commit to that branch. Your current checkout, application branch, and index are left alone. There is no need to switch to the vault branch.
 
 `save` keeps the original plaintext file. **You are responsible for excluding plaintext from Git**, for example with your own `.gitignore`. git-vault does not inspect or modify ignore settings.
 
@@ -377,7 +377,7 @@ Paths are relative to the current directory; `-a` uses stored repository-relativ
 git vault init [options] (-r KEY | -R PATH) [-l TEXT]...
 ```
 
-Create a local orphan vault branch (default name `vault`) with a `default` profile. The branch must not already exist. Its tree is separate from application history and holds encrypted files plus the public keys used for encryption. This command creates the branch itself and does not accept `-n` or `-B`. Your checkout, application branch, and index are left alone. Recipients are required via `-r` or `-R`.
+Create a local orphan vault branch (default name `vault`) with a `default` profile and a root `README.md` describing the branch. The branch must not already exist. Its tree is separate from application history and holds encrypted files plus the public keys used for encryption. This command creates the branch itself and does not accept `-n` or `-B`. Your checkout, application branch, and index are left alone. Recipients are required via `-r` or `-R`.
 
 | Option | Purpose |
 | --- | --- |
@@ -622,9 +622,10 @@ Use `-o` without a path to install it at `.agents/skills/git-vault/SKILL.md`, or
 
 ## Storage and scope
 
-Each profile occupies a directory at the root of the vault branch:
+Each profile occupies a directory at the root of the vault branch. A `README.md` at that root explains that the branch is managed by git-vault:
 
 ```text
+README.md
 default/
   recipients.json
   files/
@@ -635,7 +636,7 @@ production/
     .env
 ```
 
-Every file under `files/` is binary age ciphertext, regardless of its name. Original relative paths are preserved without extra extensions. The recipients file is canonical JSON (`version` 1) with `key` and optional `label` fields. File names, sizes, profile names, labels, and Git metadata remain visible.
+Every file under `files/` is binary age ciphertext, regardless of its name. Original relative paths are preserved without extra extensions. The recipients file is canonical JSON (`version` 1) with `key` and optional `label` fields. File names, sizes, profile names, labels, and Git metadata remain visible. `README.md` is reserved at the branch root and cannot be used as a profile name.
 
 The tool is intended for small files in application repositories. It does not provide secure deletion, key storage, access revocation for old commits, or automatic conflict resolution. Removing a saved file leaves its history intact. Only regular files inside the working tree are supported; directories, symlinks, Git administration paths, and Windows are outside the initial scope. Original ownership, timestamps, and executable permissions are not preserved. Restored files have mode `0600`, and newly created directories have mode `0700`.
 

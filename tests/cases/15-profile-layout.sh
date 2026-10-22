@@ -2,8 +2,10 @@
 # Profiles are root directories; legacy commands and layouts are not accepted.
 source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
 git vault init -r "$RECIPIENT1"
+git show vault:README.md | grep -q 'managed by'
 git vault profiles add production -r "$RECIPIENT2"
-assert_eq "$(git ls-tree --name-only vault)" $'default\nproduction'
+assert_eq "$(git ls-tree --name-only vault)" $'README.md\ndefault\nproduction'
+expect_exit 2 git vault profiles add README.md -r "$RECIPIENT1"
 printf 'production secret\n' >.env
 git vault save --profile production .env
 git show vault:production/files/.env | age -d -i "$KEY2" >"$TEST_ROOT/decrypted"
