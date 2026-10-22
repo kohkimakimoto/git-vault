@@ -155,18 +155,18 @@ git vault restore .env
 
 ### Passphrase-protected identity files
 
-age can wrap an identity in a passphrase-encrypted file. git-vault accepts that form for `-i` and `vault.identity`:
+age can wrap an identity in a passphrase-encrypted file. git-vault accepts that form for `-i` and `vault.identity`.
 
 ```sh
 # Create a passphrase-protected identity (age prompts for the passphrase)
-age-keygen | age -p > .git/vaultkey.txt
-chmod 600 .git/vaultkey.txt
-git config vault.identity "$PWD/.git/vaultkey.txt"
+age-keygen | age -p > .git/vaultkey.age
+chmod 600 .git/vaultkey.age
+git config vault.identity "$PWD/.git/vaultkey.age"
 ```
 
 ### `vault.identity`
 
-Set a default identity file path with `git config` (the path to the file, not the key material). The value must be an **absolute path** or start with `~`. Prefer a **repository-local** setting. The recommended layout is described under [Recommended practice and limits](#recommended-practice-and-limits).
+Set a default identity file path with `git config`. The value must be an **absolute path** or start with `~`. Prefer a **repository-local** setting. The recommended layout is described under [Recommended practice and limits](#recommended-practice-and-limits).
 
 ```sh
 # From the repository root: absolute path via $PWD
@@ -311,7 +311,7 @@ chmod 600 .git/vaultkey.txt
 git config vault.identity "$PWD/.git/vaultkey.txt"
 ```
 
-Optionally wrap that identity with a passphrase (`age-keygen | age -p > .git/vaultkey.txt`) so the raw secret is not stored in plaintext on disk. See [Passphrase-protected identity files](#passphrase-protected-identity-files).
+Optionally wrap that identity with a passphrase (`age-keygen | age -p > .git/vaultkey.age`) so the raw secret is not stored in plaintext on disk. See [Passphrase-protected identity files](#passphrase-protected-identity-files).
 
 Give only the public key to the repository administrator for `init`, `profiles add`, or `recipients add`. The file under `.git/` is local to this clone and is not pushed. Deleting the clone directory from disk removes this working copy's key with it. That makes disposal easier; it does not dispose of copies elsewhere (other machines, backups, or a second clone). If you discard a clone while still developing, generate a new key for the next clone and have the administrator register the new public key (a master identity can restore and re-add as needed).
 
