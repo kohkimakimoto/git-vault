@@ -100,6 +100,16 @@ Restore writes plaintext files with mode `0600`. Do not print restored secrets; 
 
 Existing files and tracked paths are rejected by default. Use `restore -f` only when overwriting the destination, including any uncommitted changes, is within the user's requested scope. `save -f` permits tracked input and reads its working tree content, not the staged version. Neither command modifies the index or removes plaintext from application history. Do not add `-f` just to bypass an unexpected failure; inspect the reported path and intended operation first.
 
+## Clean restored plaintext
+
+`git vault clean` deletes working-tree plaintext for saved paths without changing the vault branch:
+
+```sh
+git vault clean -p production -a
+```
+
+Prefer lasting `restore` for day-to-day development. For short-lived access (for example deploy), restore, run your command, then `clean` in your own script.
+
 ## Initialize, organize, and rotate recipients
 
 Only initialize when the task calls for a new vault. If `origin/vault` already exists, use that history instead of creating an independent vault:
@@ -765,6 +775,23 @@ def restore(repo, args, profile, names):
             temporary.unlink(missing_ok=True)
 
 
+def clean(repo, profile, names):
+    if not names:
+        print("No files.")
+        return
+    for name in names:
+        if name not in profile.files:
+            raise VaultError(f"File is not saved in this profile: {name}")
+        path = repo.local_path(name)
+        if not path.exists():
+            print(f"Absent: {name}")
+            continue
+        if not path.is_file():
+            raise VaultError(f"Not a regular file: {name}")
+        path.unlink()
+        print(f"Cleaned: {name}")
+
+
 def execute(args):
     for command in ("git", "age"):
         if shutil.which(command) is None:
@@ -773,7 +800,9 @@ def execute(args):
     branch = args.branch or "vault"
     ref = repo.branch_ref(branch)
     old_oid = repo.branch_oid(ref)
-    update = args.operation not in ("list", "restore", "profiles-list", "recipients-list")
+    update = args.operation not in (
+        "list", "restore", "clean", "profiles-list", "recipients-list",
+    )
     if update:
         repo.ensure_not_checked_out(ref)
     if args.operation == "init":
@@ -791,7 +820,9 @@ def execute(args):
         parent = repo.commit_oid(args.base or "vault")
     else:
         if not old_oid:
-            if args.operation in ("list", "restore", "profiles-list", "recipients-list"):
+            if args.operation in (
+                "list", "restore", "clean", "profiles-list", "recipients-list",
+            ):
                 raise VaultError(f"Branch does not exist: {branch}.")
             raise VaultError(f"Branch does not exist: {branch}. Use init or --new-branch.")
         parent = repo.commit_oid(ref)
@@ -863,6 +894,9 @@ def execute(args):
     if args.operation == "restore":
         restore(repo, args, profile, names)
         return
+    if args.operation == "clean":
+        clean(repo, profile, names)
+        return
     message = message_for(args, names)
     if args.operation == "remove":
         for name in names:
@@ -900,6 +934,7 @@ Examples:
   git vault init -r age...
   git vault save -p production -m 'Rotate credentials' -- .env
   git vault restore -a -i /path/to/identity
+  git vault clean -p production -a
   git vault save -b vault-update -n -B origin/vault -- .env
 """
     parser = argparse.ArgumentParser(
@@ -1062,6 +1097,19 @@ Examples:
             metavar="PATH",
             help="Paths relative to the current directory; use -- before leading hyphens.",
         )
+    clean_parser = leaf(
+        commands, "clean", "clean",
+        "Delete working-tree plaintext for saved paths; leave the vault branch unchanged.",
+        profile=True,
+    )
+    clean_parser.add_argument(
+        "-a", "--all", action="store_true",
+        help="Clean all saved paths in this profile; cannot be combined with explicit paths.",
+    )
+    clean_parser.add_argument(
+        "paths", nargs="*", metavar="PATH",
+        help="Paths relative to the current directory; use -- before leading hyphens.",
+    )
     return parser
 
 
@@ -1085,7 +1133,7 @@ def main():
         parser.error("--new-branch requires an explicit --branch")
     if getattr(args, "base", None) is not None and not args.new_branch:
         parser.error("--base requires --new-branch")
-    if hasattr(args, "paths") and bool(args.paths) == bool(args.all):
+    if hasattr(args, "paths") and hasattr(args, "all") and bool(args.paths) == bool(args.all):
         parser.error("specify file paths" if args.operation == "remove" else "specify file paths or --all, exclusively")
     try:
         if args.command == "skill":

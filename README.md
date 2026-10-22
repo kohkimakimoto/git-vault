@@ -118,6 +118,9 @@ git vault save -p production -a
 # Restore every file in this profile.
 git vault restore -p production -a -f -i /path/to/identity
 
+# Delete working-tree plaintext for saved paths (vault unchanged)
+git vault clean -p production -a
+
 # Remove a saved file, keeping its plaintext and past commits.
 git vault remove -p production .env
 
@@ -126,6 +129,8 @@ git vault profiles remove production
 ```
 
 `save -a` does not discover new files. Register them with explicit paths first. If any registered source file is missing, the entire save fails.
+
+Use `restore` for day-to-day profiles you keep decrypted while developing. For short-lived access (for example deploy), restore what you need, run your command, then `clean` in your own script.
 
 ## Private key input
 
@@ -546,6 +551,22 @@ Remove the specified paths from the current saved snapshot in one commit. Keep w
 | `-B`, `--base REF` | Creation base (default: `vault`); requires `-n`. |
 | `-m`, `--message TEXT` | Commit message; repeat for paragraphs. Cannot be combined with `-F`. |
 | `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Cannot be combined with `-m`. |
+| `-h`, `--help` | Show help. |
+
+### `clean`
+
+```sh
+git vault clean [options] PATH...
+git vault clean [options] -a
+```
+
+Delete working-tree plaintext for the selected saved paths. The vault branch is not changed. Paths must be registered in the profile. Missing files are reported as absent.
+
+| Option | Purpose |
+| --- | --- |
+| `-b`, `--branch NAME` | Local branch to use (default: `vault`). |
+| `-p`, `--profile NAME` | Profile (default: `default`). |
+| `-a`, `--all` | Clean all saved paths in the profile; cannot be combined with explicit paths. |
 | `-h`, `--help` | Show help. |
 
 ### `version`
