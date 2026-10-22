@@ -37,18 +37,19 @@ Place [`bin/git-vault`](bin/git-vault) somewhere on your `PATH` and make it exec
 
 ## Quick start
 
-From the root of your application repository, create an age identity for this clone and point `vault.identity` at it (see [Recommended practice and limits](#recommended-practice-and-limits)):
+From the root of your application repository, create a **passphrase-protected** age identity for this clone and point `vault.identity` at it (see [Recommended practice and limits](#recommended-practice-and-limits)):
 
 ```sh
-# Generate an age identity inside the local Git directory (not pushed)
-age-keygen -o .git/vaultkey.txt
-chmod 600 .git/vaultkey.txt
+# Generate a passphrase-protected identity inside the local Git directory (not pushed)
+# age-keygen prints the public key; age -p prompts for a passphrase
+age-keygen | age -p > .git/vaultkey.age
+chmod 600 .git/vaultkey.age
 
 # Absolute path via $PWD (required by vault.identity)
-git config vault.identity "$PWD/.git/vaultkey.txt"
+git config vault.identity "$PWD/.git/vaultkey.age"
 ```
 
-`age-keygen` writes an identity file in this form (and also prints the public key):
+`age-keygen` alone would write a plaintext identity like this (and also print the public key):
 
 ```
 # created: 2026-10-17T21:53:43+09:00
@@ -56,7 +57,7 @@ git config vault.identity "$PWD/.git/vaultkey.txt"
 AGE-SECRET-KEY-14S4CNP040N60QYYWSMGQ2225PSWKSHRCFRSW6954MY2XHC2T9U4QNV05FQ
 ```
 
-The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` comment is the matching public key. Pass that public key to `-r` when you initialize a vault or add recipients. Keep the identity file private; git-vault stores public keys only, never the private key.
+The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` comment is the matching public key. Pass that public key to `-r` when you initialize a vault or add recipients. With `age-keygen | age -p`, the file on disk is passphrase-encrypted (age's `.age` form); use a strong passphrase. Keep the identity file private; git-vault stores public keys only, never the private key.
 
 ```sh
 # Create the orphan vault branch with the given public key
@@ -150,9 +151,9 @@ git vault restore -i - .env < /path/to/identity
 cat /path/to/identity | git vault restore -a -i -
 
 # Repository-local default (absolute path; see Recommended practice and limits)
-git config vault.identity "$PWD/.git/vaultkey.txt"
+git config vault.identity "$PWD/.git/vaultkey.age"
 
-# Restore using vault.identity (no -i)
+# Restore using vault.identity (no -i; passphrase prompted when the file is protected)
 git vault restore .env
 ```
 
@@ -160,10 +161,9 @@ git vault restore .env
 
 ### Passphrase-protected identity files
 
-age can wrap an identity in a passphrase-encrypted file. git-vault accepts that form for `-i` and `vault.identity`.
+Following [age](https://github.com/FiloSottile/age)'s examples, keep a plaintext identity as `.txt` and a passphrase-protected one as `.age`. Day-to-day human use should prefer `.git/vaultkey.age` (see [Recommended practice and limits](#recommended-practice-and-limits)). git-vault accepts either form for `-i` and `vault.identity`.
 
 ```sh
-# Create a passphrase-protected identity (age prompts for the passphrase)
 age-keygen | age -p > .git/vaultkey.age
 chmod 600 .git/vaultkey.age
 git config vault.identity "$PWD/.git/vaultkey.age"
@@ -175,14 +175,14 @@ Set a default identity file path with `git config`. The value must be an **absol
 
 ```sh
 # From the repository root: absolute path via $PWD
-git config vault.identity "$PWD/.git/vaultkey.txt"
+git config vault.identity "$PWD/.git/vaultkey.age"
 ```
 
 This writes into the repository's Git config (typically `.git/config`), for example:
 
 ```ini
 [vault]
-	identity = /path/to/repo/.git/vaultkey.txt
+	identity = /path/to/repo/.git/vaultkey.age
 ```
 
 `git config --global vault.identity ...` is supported but not recommended for day-to-day use: it points every repository at the same default and encourages sharing one key across unrelated lifecycles.
@@ -304,29 +304,45 @@ For pull requests, reapply changes if recipients in the same profile changed sin
 
 git-vault stores ciphertext in Git history. Removing a recipient from the current tip does **not** make that identity useless against older commits, and rewriting or deleting remote history cannot control every clone that already exists. Treat access control as: current tip ACL, private-key custody, and (when needed) rotating the underlying secret values—not as complete cryptographic erasure of the past.
 
-### One identity per person per clone
-
-Prefer a dedicated age identity for each developer **and** each repository clone, not a shared development key and not one personal key reused across projects. Different repositories revoke access on different schedules; sharing a private key makes disposal hard.
-
-Keep that identity's lifecycle tied to the clone: store the private key inside the local Git directory and point repository-local `vault.identity` at it (absolute path). From the repository root:
-
-```sh
-age-keygen -o .git/vaultkey.txt
-chmod 600 .git/vaultkey.txt
-git config vault.identity "$PWD/.git/vaultkey.txt"
-```
-
-Optionally wrap that identity with a passphrase (`age-keygen | age -p > .git/vaultkey.age`) so the raw secret is not stored in plaintext on disk. See [Passphrase-protected identity files](#passphrase-protected-identity-files).
-
-Give only the public key to the repository administrator for `init`, `profiles add`, or `recipients add`. The file under `.git/` is local to this clone and is not pushed. Deleting the clone directory from disk removes this working copy's key with it. That makes disposal easier; it does not dispose of copies elsewhere (other machines, backups, or a second clone). If you discard a clone while still developing, generate a new key for the next clone and have the administrator register the new public key (a master identity can restore and re-add as needed).
-
-Avoid `git config --global vault.identity` for day-to-day use.
-
 ### Master key
 
 Include one privileged public key in **every** profile (for example at `init` and each `profiles add`), and keep that identity available for `recipients add` / `remove` and emergency restore across profiles.
 
-Treat that identity as high privilege: it can decrypt the current snapshot of every profile where it is listed. Store it offline or with strict access control, prefer a clear `-l` label such as `master`, and avoid using it as the day-to-day key for routine restore when a narrower key is enough. Do not keep the master private key in a developer clone's `.git/vaultkey.txt`.
+Treat that identity as high privilege: it can decrypt the current snapshot of every profile where it is listed. Store it offline or with strict access control, prefer a clear `-l` label such as `master`, and avoid using it as the day-to-day key for routine restore when a narrower key is enough. Do not keep the master private key in a developer clone's `.git/vaultkey.age`.
+
+### Recommended workflow
+
+1. **Per person, per repository clone, create a passphrase-protected identity** under the local Git directory (not pushed):
+
+   ```sh
+   age-keygen | age -p > .git/vaultkey.age
+   chmod 600 .git/vaultkey.age
+   git config vault.identity "$PWD/.git/vaultkey.age"
+   ```
+
+   Use one identity per person per clone—not a shared team key, and not one personal key reused across unrelated projects. Different repositories revoke access on different schedules; sharing a private key makes disposal hard. Avoid `git config --global vault.identity` for day-to-day use.
+
+2. **Give only the public key** (the `Public key: age1...` line from `age-keygen`) to the repository administrator. Do not send the identity file or the passphrase.
+
+3. **The administrator registers that public key** on the profiles the person needs (`recipients add`, or at `init` / `profiles add`), using a [master identity](#master-key) when the profile already has files. Register the person only on profiles they should decrypt—narrow when you can; the same public key may be listed on more than one profile when that matches how they work.
+
+4. **Fetch or update the local `vault` branch** from the remote (see [Cloning and synchronization](#cloning-and-synchronization)). git-vault never fetches or pushes itself.
+
+5. **Development:** `restore` the profiles and paths you need for ongoing work. Those plaintext files stay in the working tree until you delete them yourself or run `clean`. Exclude plaintext from the application branch (for example with `.gitignore`); git-vault does not manage ignores.
+
+6. **Deploy or other short-lived use:** `restore` the production (or other) profile, run the deploy or tool, then `clean` that profile so plaintext does not linger:
+
+   ```sh
+   git vault restore -p production -a -f
+   ./deploy.sh
+   git vault clean -p production -a
+   ```
+
+   `clean` only deletes working-tree files for saved paths; it does not change the vault branch. It is best-effort (for example `kill -9` can leave files behind)—pair it with ordinary care, not with an expectation of secure erase.
+
+7. **Automation (CI, bots):** non-interactive jobs usually cannot unlock a passphrase-protected identity. Use a **separate plaintext identity** (age's `.txt` form, or the same material injected as a CI secret file) registered only on the profiles the job needs, with a short lifetime and normal secret-store rotation. Do not reuse a human's `.git/vaultkey.age` or passphrase in CI.
+
+Deleting the clone directory removes that working copy's `.git/vaultkey.age`. It does not dispose of copies elsewhere (other machines, backups, or a second clone). If you discard a clone while still developing, generate a new identity for the next clone and have the administrator register the new public key.
 
 ### What `recipients remove` does not do
 
@@ -342,7 +358,7 @@ Repository-side removal is easy to misread as “that identity is now useless.�
 When someone should lose access:
 
 1. Remove their public key from every profile that listed it (`recipients remove`), using a remaining privileged identity (typically the master key).
-2. Have them **delete the local clone from disk** so `.git/vaultkey.txt` for that repository goes with it. Also drop any other copies of that identity (other machines, backups, password managers, CI secrets). Keeping the folder after access is revoked leaves the private key in place.
+2. Have them **delete the local clone from disk** so `.git/vaultkey.age` (or any plaintext identity file) for that repository goes with it. Also drop any other copies of that identity (other machines, backups, password managers, CI secrets). Keeping the folder after access is revoked leaves the private key material in place.
 3. If past values must become useless even to someone who still holds an old identity or an old clone, rotate those secret values in the application and `save` again under the updated recipients.
 
 Rewriting remote vault history is optional hygiene for new clones; it does not control existing copies of old commits.

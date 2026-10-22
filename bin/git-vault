@@ -85,7 +85,7 @@ git vault save -p production -b vault-update-secrets -- credentials.json
 AGE-SECRET-KEY-14S4CNP040N60QYYWSMGQ2225PSWKSHRCFRSW6954MY2XHC2T9U4QNV05FQ
 ```
 
-The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` comment is the matching public key. Use that public key with `-r` / recipients. Use the identity file with `-i PATH` to decrypt. To read an identity from stdin, use `-i -`. Optionally set repository-local `git config vault.identity` to an absolute path when `-i` is omitted. Prefer one age identity per person per clone, stored as `.git/vaultkey.txt` in that clone (`git config vault.identity "$PWD/.git/vaultkey.txt"` from the repo root), so deleting the clone discards that working copy's key. Avoid a user-global `vault.identity` or one private key reused across repositories. Multiple native age secrets belong in one identity file. Do not combine `-i -` with `-R -`. A passphrase-protected age identity (`age-keygen | age -p > key.age`) is supported: git-vault unlocks it once per operation via the terminal and reuses the unlocked key for every decrypt in that operation. Never read, print, or pass the private key in conversation or command arguments.
+The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` comment is the matching public key. Use that public key with `-r` / recipients. Use the identity file with `-i PATH` to decrypt. To read an identity from stdin, use `-i -`. Optionally set repository-local `git config vault.identity` to an absolute path when `-i` is omitted. Prefer one passphrase-protected age identity per person per clone (`age-keygen | age -p > .git/vaultkey.age`, then `git config vault.identity "$PWD/.git/vaultkey.age"`), so the raw secret is not stored in plaintext and deleting the clone discards that working copy's key. Hand only the public key to an administrator to register on the profiles the person needs. Avoid a user-global `vault.identity` or one private key reused across repositories. For CI, use a separate plaintext identity without a passphrase. Multiple native age secrets belong in one identity file. Do not combine `-i -` with `-R -`. Never read, print, or pass the private key in conversation or command arguments.
 
 ## Restore files
 
@@ -108,7 +108,7 @@ Existing files and tracked paths are rejected by default. Use `restore -f` only 
 git vault clean -p production -a
 ```
 
-Prefer lasting `restore` for day-to-day development. For short-lived access (for example deploy), restore, run your command, then `clean` in your own script.
+Prefer lasting `restore` for day-to-day development. For short-lived access (for example deploy), restore, run your command, then `clean` in your own script so plaintext does not linger.
 
 ## Initialize, organize, and rotate recipients
 
@@ -132,9 +132,9 @@ git vault profiles remove production
 
 Provide recipients with `-r` or `-R` (not both). Optional `-l` labels keys (omit, or one label per key; blank and comment lines in `-R` do not count). Select the identity with `-i` or `vault.identity`. Labels are metadata only; identify recipients by public key.
 
-`recipients add` and `recipients remove` decrypt every saved file in the profile, then re-encrypt for the updated public keys, and commit the list and ciphertext together. A private identity is required for that decrypt step unless the profile is empty; public keys alone cannot rewrite age ciphertext. `restore` also needs a private identity. Prefer including a master public key in every profile, and treat its private key as high privilege; do not keep the master private key in a developer clone's `.git/vaultkey.txt`. Failure leaves the branch unchanged. The last public key cannot be removed. Profiles can be removed only when empty, and `default` cannot be removed. These updates also support `-b`, `-n`, and `-B` (except `init`).
+`recipients add` and `recipients remove` decrypt every saved file in the profile, then re-encrypt for the updated public keys, and commit the list and ciphertext together. A private identity is required for that decrypt step unless the profile is empty; public keys alone cannot rewrite age ciphertext. `restore` also needs a private identity. Prefer including a master public key in every profile, and treat its private key as high privilege; do not keep the master private key in a developer clone's `.git/vaultkey.age`. Failure leaves the branch unchanged. The last public key cannot be removed. Profiles can be removed only when empty, and `default` cannot be removed. These updates also support `-b`, `-n`, and `-B` (except `init`).
 
-`recipients remove` updates the current vault tip only. It does not revoke historical ciphertext and does not dispose of anyone's private key. Do not treat repository-side removal as complete offboarding: remove their public key, have them delete the local clone (so `.git/vaultkey.txt` goes with it) and any other copies, and rotate secret values when past access must become useless even with an old identity or clone. Remote history rewrite does not control existing clones. Prefer one identity per person per clone so removal stops access to newly saved secrets after re-encryption and the private key can be discarded with that clone.
+`recipients remove` updates the current vault tip only. It does not revoke historical ciphertext and does not dispose of anyone's private key. Do not treat repository-side removal as complete offboarding: remove their public key, have them delete the local clone (so `.git/vaultkey.age` goes with it) and any other copies, and rotate secret values when past access must become useless even with an old identity or clone. Remote history rewrite does not control existing clones. Prefer one identity per person per clone so removal stops access to newly saved secrets after re-encryption and the private key can be discarded with that clone.
 
 ## Git integration and limits
 
