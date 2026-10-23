@@ -118,6 +118,9 @@ git vault save -p production -a
 # Restore every file in this profile.
 git vault restore -p production -a -f
 
+# Compare working-tree plaintext to the latest snapshot
+git vault diff -p production -a
+
 # Delete working-tree plaintext for saved paths (vault unchanged)
 git vault clean -p production -a
 
@@ -134,7 +137,7 @@ Use `restore` for day-to-day profiles you keep decrypted while developing. For s
 
 ## Private key input
 
-Identity is required only when decrypting (restore, or recipients add/remove when the profile has files). Resolve it as follows:
+Identity is required when decrypting: `restore`, `diff`, default `clean` (not `clean -f`), or `recipients add` / `remove` when the profile has files. Resolve it as follows:
 
 1. `-i` / `--identity PATH`. Use `-i -` to read an identity from stdin. Overrides `vault.identity`.
 2. Otherwise `git config vault.identity` (see below).
@@ -337,7 +340,7 @@ Treat that identity as high privilege: it can decrypt the current snapshot of ev
    git vault clean -p production -a
    ```
 
-   `clean` only deletes working-tree files for saved paths; it does not change the vault branch. It is best-effort (for example `kill -9` can leave files behind)—pair it with ordinary care, not with an expectation of secure erase.
+   Default `clean` compares each existing path to the latest snapshot and aborts if any differ; use `clean -f` only when discarding divergent plaintext is intentional. `clean` does not change the vault branch. It is best-effort (for example `kill -9` can leave files behind)—pair it with ordinary care, not with an expectation of secure erase.
 
 7. **Automation (CI, bots):** non-interactive jobs usually cannot unlock a passphrase-protected identity. Use a **separate plaintext identity** (age's `.txt` form, or the same material injected as a CI secret file) registered only on the profiles the job needs, with a short lifetime and normal secret-store rotation. Do not reuse a human's `.git/vaultkey.age` or passphrase in CI.
 
@@ -568,6 +571,23 @@ Remove the specified paths from the current saved snapshot in one commit. Keep w
 | `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Cannot be combined with `-m`. |
 | `-h`, `--help` | Show help. |
 
+### `diff`
+
+```sh
+git vault diff [options] PATH...
+git vault diff [options] -a
+```
+
+Compare working-tree plaintext to the latest saved snapshot in the selected profile. Prints a unified diff for each changed path (`a/<path>` is the vault tip, `b/<path>` is the working tree). Missing paths are reported as absent and are not differences. Exit status is `1` when any selected path differs, otherwise `0`. Diffs contain secrets.
+
+| Option | Purpose |
+| --- | --- |
+| `-b`, `--branch NAME` | Local branch to use (default: `vault`). |
+| `-p`, `--profile NAME` | Profile (default: `default`). |
+| `-i`, `--identity PATH` | Identity file. Use `-i -` for stdin, or omit and use `vault.identity`. |
+| `-a`, `--all` | Diff all saved paths in the profile; cannot be combined with explicit paths. |
+| `-h`, `--help` | Show help. |
+
 ### `clean`
 
 ```sh
@@ -577,13 +597,17 @@ git vault clean [options] -a
 
 Delete working-tree plaintext for the selected saved paths. The vault branch is not changed. Paths must be registered in the profile. Missing files are reported as absent.
 
-**Deletion requires no confirmation or `-f`.** `clean` does not check Git tracking status, compare contents with the saved snapshot, or check whether a file was restored by git-vault. It deletes the current file at each selected path, including unsaved edits, tracked files, and content restored from another profile. Check that the current files can be discarded before running it.
+Without `-f`, an identity is required. git-vault decrypts the tip and compares every existing selected path to the working tree first. If any path differs, it prints those unified diffs and exits with status `1` without deleting anything. If every existing path matches, those files are deleted.
+
+With `-f`, skip the comparison and identity, and delete the current file at each selected path unconditionally (including unsaved edits, tracked files, and content restored from another profile).
 
 | Option | Purpose |
 | --- | --- |
 | `-b`, `--branch NAME` | Local branch to use (default: `vault`). |
 | `-p`, `--profile NAME` | Profile (default: `default`). |
+| `-i`, `--identity PATH` | Identity for the default compare step. Use `-i -` for stdin, or omit and use `vault.identity`. Not used with `-f`. |
 | `-a`, `--all` | Clean all saved paths in the profile; cannot be combined with explicit paths. |
+| `-f`, `--force` | Delete without comparing to the vault or requiring an identity. |
 | `-h`, `--help` | Show help. |
 
 ### `version`
@@ -653,7 +677,7 @@ Each script in `tests/cases/` exercises one scenario by running `git vault` and 
 bash tests/cases/03-recipients.sh
 ```
 
-`tests/common.sh` contains temporary-repository setup and small assertions. Each scenario creates disposable keys and repositories, isolates personal Git configuration, and cleans up afterward. Tests cover round trips, profiles, recipient rotation and labels, working branches, messages, force handling, paths, historical restore, linked worktrees, remote divergence, failure atomicity, and agent skill output and installation.
+`tests/common.sh` contains temporary-repository setup and small assertions. Each scenario creates disposable keys and repositories, isolates personal Git configuration, and cleans up afterward. Tests cover round trips, profiles, recipient rotation and labels, working branches, messages, force handling, paths, historical restore, linked worktrees, remote divergence, failure atomicity, clean/diff against the vault tip, and agent skill output and installation.
 
 There is no test framework or Python package dependency. Bash, Git, age, age-keygen, and Python (for git-vault itself) are required. The stdin identity test restores multiple files in one operation to verify that the identity is read once and reused. Tests never import git-vault's implementation.
 

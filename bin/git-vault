@@ -5,6 +5,7 @@
 import argparse
 from contextlib import contextmanager
 from dataclasses import dataclass
+import difflib
 import json
 import os
 from pathlib import Path
@@ -110,15 +111,16 @@ Restore writes plaintext files with mode `0600`. Do not print restored secrets; 
 
 Existing files and tracked paths are rejected by default. Use `restore -f` only when overwriting the destination, including any uncommitted changes, is within the user's requested scope. `save -f` permits tracked input and reads its working tree content, not the staged version. Neither command modifies the index or removes plaintext from application history. Do not add `-f` just to bypass an unexpected failure; inspect the reported path and intended operation first.
 
-## Clean restored plaintext
+## Diff and clean working-tree plaintext
 
-`git vault clean` deletes working-tree plaintext for saved paths without changing the vault branch:
+`git vault diff` compares working-tree plaintext to the latest saved snapshot (unified diff on stdout). `git vault clean` deletes that plaintext without changing the vault branch:
 
 ```sh
+git vault diff -p production -a
 git vault clean -p production -a
 ```
 
-Deletion requires no confirmation or `-f`. `clean` does not check Git tracking status, compare contents with the saved snapshot, or check whether a file was restored by git-vault. It deletes the current file at each selected path, including unsaved edits, tracked files, and content restored from another profile. Before running it, ensure discarding those current files is within the user's requested scope.
+Both need an identity (`-i` or `vault.identity`) except `clean -f`. Default `clean` decrypts the tip and compares every existing selected path first. If any file differs, it prints those unified diffs and aborts without deleting anything. Matching files are deleted; missing paths are reported as absent. `clean -f` skips the comparison and identity, and deletes current files unconditionally (including unsaved edits, tracked files, and content restored from another profile). Unified diffs contain secrets: show them to the user or use them locally; do not paste them into chat.
 
 Prefer lasting `restore` for day-to-day development. For short-lived access (for example deploy), restore, run your command, then `clean` in your own script so plaintext does not linger.
 
@@ -795,13 +797,87 @@ def restore(repo, args, profile, names):
             temporary.unlink(missing_ok=True)
 
 
-def clean(repo, profile, names):
+@dataclass
+class CompareResult:
+    name: str
+    status: str
+    diff_text: str | None = None
+
+
+def unified_diff_text(name, vault_data, work_data):
+    try:
+        vault_text = vault_data.decode("utf-8")
+        work_text = work_data.decode("utf-8")
+    except UnicodeDecodeError:
+        return f"Binary files a/{name} and b/{name} differ\n"
+    return "".join(difflib.unified_diff(
+        vault_text.splitlines(keepends=True),
+        work_text.splitlines(keepends=True),
+        fromfile=f"a/{name}",
+        tofile=f"b/{name}",
+    ))
+
+
+def compare_working_tree(repo, profile, names, identity_paths):
+    results = []
+    for name in names:
+        if name not in profile.files:
+            raise VaultError(f"File is not saved in this profile: {name}")
+        path = repo.local_path(name)
+        if not path.exists():
+            results.append(CompareResult(name, "absent"))
+            continue
+        if not path.is_file():
+            raise VaultError(f"Not a regular file: {name}")
+        work_data = path.read_bytes()
+        vault_data = decrypt(repo.blob(profile.files[name]), identity_paths)
+        if work_data == vault_data:
+            results.append(CompareResult(name, "same"))
+        else:
+            results.append(CompareResult(name, "changed", unified_diff_text(name, vault_data, work_data)))
+    return results
+
+
+def print_compare_diffs(results):
+    for result in results:
+        if result.status != "changed" or not result.diff_text:
+            continue
+        sys.stdout.write(result.diff_text)
+        if not result.diff_text.endswith("\n"):
+            sys.stdout.write("\n")
+
+
+def diff_files(repo, args, profile, names):
+    if not names:
+        print("No files.")
+        return 0
+    with identities(repo, getattr(args, "identity", None)) as keys:
+        results = compare_working_tree(repo, profile, names, keys)
+    changed = False
+    for result in results:
+        if result.status == "absent":
+            print(f"Absent: {result.name}")
+        elif result.status == "changed":
+            changed = True
+    print_compare_diffs(results)
+    return 1 if changed else 0
+
+
+def clean(repo, args, profile, names):
     if not names:
         print("No files.")
         return
     for name in names:
         if name not in profile.files:
             raise VaultError(f"File is not saved in this profile: {name}")
+    if not args.force:
+        with identities(repo, getattr(args, "identity", None)) as keys:
+            results = compare_working_tree(repo, profile, names, keys)
+        changed = [result for result in results if result.status == "changed"]
+        if changed:
+            print_compare_diffs(changed)
+            raise VaultError("Working tree differs from the vault. Use -f to delete anyway.")
+    for name in names:
         path = repo.local_path(name)
         if not path.exists():
             print(f"Absent: {name}")
@@ -821,7 +897,7 @@ def execute(args):
     ref = repo.branch_ref(branch)
     old_oid = repo.branch_oid(ref)
     update = args.operation not in (
-        "list", "restore", "clean", "profiles-list", "recipients-list",
+        "list", "restore", "clean", "diff", "profiles-list", "recipients-list",
     )
     if update:
         repo.ensure_not_checked_out(ref)
@@ -841,7 +917,7 @@ def execute(args):
     else:
         if not old_oid:
             if args.operation in (
-                "list", "restore", "clean", "profiles-list", "recipients-list",
+                "list", "restore", "clean", "diff", "profiles-list", "recipients-list",
             ):
                 raise VaultError(f"Branch does not exist: {branch}.")
             raise VaultError(f"Branch does not exist: {branch}. Use init or --new-branch.")
@@ -914,8 +990,10 @@ def execute(args):
     if args.operation == "restore":
         restore(repo, args, profile, names)
         return
+    if args.operation == "diff":
+        return diff_files(repo, args, profile, names)
     if args.operation == "clean":
-        clean(repo, profile, names)
+        clean(repo, args, profile, names)
         return
     message = message_for(args, names)
     if args.operation == "remove":
@@ -954,6 +1032,7 @@ Examples:
   git vault init -r age...
   git vault save -p production -m 'Rotate credentials' -- .env
   git vault restore -a -i /path/to/identity
+  git vault diff -p production -a
   git vault clean -p production -a
   git vault save -b vault-update -n -B origin/vault -- .env
 """
@@ -1117,17 +1196,34 @@ Examples:
             metavar="PATH",
             help="Paths relative to the current directory; use -- before leading hyphens.",
         )
+    diff_parser = leaf(
+        commands, "diff", "diff",
+        "Compare working-tree plaintext to the latest saved snapshot; print unified diffs. "
+        "Exit 1 when any selected path differs. Absent paths are reported and are not differences.",
+        profile=True, identity=True,
+    )
+    diff_parser.add_argument(
+        "-a", "--all", action="store_true",
+        help="Diff all saved paths in this profile; cannot be combined with explicit paths.",
+    )
+    diff_parser.add_argument(
+        "paths", nargs="*", metavar="PATH",
+        help="Paths relative to the current directory; use -- before leading hyphens.",
+    )
     clean_parser = leaf(
         commands, "clean", "clean",
         "Delete working-tree plaintext for saved paths; leave the vault branch unchanged. "
-        "No confirmation or -f is required. Deletes current files, including unsaved edits, "
-        "tracked files, and content restored from another profile, without checking "
-        "tracking status, saved contents, or whether git-vault restored them.",
-        profile=True,
+        "Without -f, compare to the latest snapshot and abort if any path differs. "
+        "With -f, delete unconditionally without an identity.",
+        profile=True, identity=True,
     )
     clean_parser.add_argument(
         "-a", "--all", action="store_true",
         help="Clean all saved paths in this profile; cannot be combined with explicit paths.",
+    )
+    clean_parser.add_argument(
+        "-f", "--force", action="store_true",
+        help="Delete without comparing to the vault or requiring an identity.",
     )
     clean_parser.add_argument(
         "paths", nargs="*", metavar="PATH",
@@ -1161,8 +1257,9 @@ def main():
     try:
         if args.command == "skill":
             output_skill(args)
-        else:
-            execute(args)
+            return 0
+        code = execute(args)
+        return 0 if code is None else code
     except VaultError as error:
         print(f"git-vault: {error}", file=sys.stderr)
         return error.code
@@ -1172,7 +1269,6 @@ def main():
     except (KeyboardInterrupt, EOFError):
         print("git-vault: Interrupted.", file=sys.stderr)
         return 1
-    return 0
 
 
 if __name__ == "__main__":
