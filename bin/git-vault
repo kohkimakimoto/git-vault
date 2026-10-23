@@ -118,6 +118,8 @@ Existing files and tracked paths are rejected by default. Use `restore -f` only 
 git vault clean -p production -a
 ```
 
+Deletion requires no confirmation or `-f`. `clean` does not check Git tracking status, compare contents with the saved snapshot, or check whether a file was restored by git-vault. It deletes the current file at each selected path, including unsaved edits, tracked files, and content restored from another profile. Before running it, ensure discarding those current files is within the user's requested scope.
+
 Prefer lasting `restore` for day-to-day development. For short-lived access (for example deploy), restore, run your command, then `clean` in your own script so plaintext does not linger.
 
 ## Initialize, organize, and rotate recipients
@@ -1117,7 +1119,10 @@ Examples:
         )
     clean_parser = leaf(
         commands, "clean", "clean",
-        "Delete working-tree plaintext for saved paths; leave the vault branch unchanged.",
+        "Delete working-tree plaintext for saved paths; leave the vault branch unchanged. "
+        "No confirmation or -f is required. Deletes current files, including unsaved edits, "
+        "tracked files, and content restored from another profile, without checking "
+        "tracking status, saved contents, or whether git-vault restored them.",
         profile=True,
     )
     clean_parser.add_argument(

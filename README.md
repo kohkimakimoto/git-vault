@@ -577,6 +577,8 @@ git vault clean [options] -a
 
 Delete working-tree plaintext for the selected saved paths. The vault branch is not changed. Paths must be registered in the profile. Missing files are reported as absent.
 
+**Deletion requires no confirmation or `-f`.** `clean` does not check Git tracking status, compare contents with the saved snapshot, or check whether a file was restored by git-vault. It deletes the current file at each selected path, including unsaved edits, tracked files, and content restored from another profile. Check that the current files can be discarded before running it.
+
 | Option | Purpose |
 | --- | --- |
 | `-b`, `--branch NAME` | Local branch to use (default: `vault`). |
