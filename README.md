@@ -50,6 +50,13 @@ age-keygen | age -p > .git/vaultkey.age
 Public key: age1x3cxwvfsdsjkjwrp9egnvaqanveajcl86jswgnvups2he7q6ldrqprv2rr
 ```
 
+> [!TIP]
+> Recover the public key later from the passphrase-protected identity (prompts for the passphrase):
+>
+> ```sh
+> age -d .git/vaultkey.age | age-keygen -y
+> ```
+
 After generating the identity, point `vault.identity` at it and initialize the vault:
 
 ```sh
