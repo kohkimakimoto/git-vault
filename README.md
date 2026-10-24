@@ -37,11 +37,22 @@ Place [`bin/git-vault`](bin/git-vault) somewhere on your `PATH` and make it exec
 
 ## Quick start
 
-This example encrypts and saves a `.env` file that holds application secrets. From the root of your application repository, create an age identity. A passphrase-protected identity under the local `.git` directory is recommended; see [Recommended practice and limits](#recommended-practice-and-limits).
+This example encrypts and saves a `.env` file that holds application secrets. A passphrase-protected identity under each clone's local `.git` directory is recommended; see [Recommended practice and limits](#recommended-practice-and-limits).
+
+Once, set a user-global default so every repository looks for that per-clone key (quote the value so your shell does not expand `$…`):
+
+```sh
+git config --global vault.identity '$GIT_COMMON_DIR/vaultkey.age'
+```
+
+`$GIT_COMMON_DIR` is a git-vault placeholder (not an environment variable); it expands to the absolute path from `git rev-parse --git-common-dir` (the shared `.git` directory, including in linked worktrees). See [`vault.identity`](#vaultidentity).
+
+From the root of your application repository, create the identity:
 
 ```sh
 # Generate an identity inside the local Git directory
 age-keygen | age -p > .git/vaultkey.age
+chmod 600 .git/vaultkey.age
 ```
 
 `age -p` prompts for a passphrase. `age-keygen` also prints the public key like the following — note it for later:
@@ -57,15 +68,9 @@ Public key: age1x3cxwvfsdsjkjwrp9egnvaqanveajcl86jswgnvups2he7q6ldrqprv2rr
 > age -d .git/vaultkey.age | age-keygen -y
 > ```
 
-After generating the identity, point `vault.identity` at it and initialize the vault:
+Then initialize the vault and save a file:
 
 ```sh
-# Change the file permissions so only the owner can read/write it
-chmod 600 .git/vaultkey.age
-
-# Configure git-vault to use that identity by default for this repository
-git config vault.identity "$PWD/.git/vaultkey.age"
-
 # Create the orphan vault branch with the given public key
 git vault init -r age...
 
@@ -159,8 +164,8 @@ git vault restore -i - .env < /path/to/identity
 # Same via a pipe; -a restores every saved path in the profile
 cat /path/to/identity | git vault restore -a -i -
 
-# Repository-local default (absolute path; see Recommended practice and limits)
-git config vault.identity "$PWD/.git/vaultkey.age"
+# User-global default with a per-clone path (see Recommended practice and limits)
+git config --global vault.identity '$GIT_COMMON_DIR/vaultkey.age'
 
 # Restore using vault.identity
 git vault restore .env
@@ -173,28 +178,39 @@ git vault restore .env
 Following [age](https://github.com/FiloSottile/age)'s examples, keep a plaintext identity as `.txt` and a passphrase-protected one as `.age`. Day-to-day human use should prefer `.git/vaultkey.age` (see [Recommended practice and limits](#recommended-practice-and-limits)). git-vault accepts either form for `-i` and `vault.identity`.
 
 ```sh
+git config --global vault.identity '$GIT_COMMON_DIR/vaultkey.age'
 age-keygen | age -p > .git/vaultkey.age
 chmod 600 .git/vaultkey.age
-git config vault.identity "$PWD/.git/vaultkey.age"
 ```
 
 ### `vault.identity`
 
-Set a default identity file path with `git config`. The value must be an **absolute path** or start with `~`. Prefer a **repository-local** setting. The recommended layout is described under [Recommended practice and limits](#recommended-practice-and-limits).
+Set a default identity file path with `git config`. The value may be:
+
+- an **absolute path**
+- a path starting with `~`
+- a path containing `$GIT_COMMON_DIR` or `$TOPLEVEL` (also `${…}`), which git-vault expands when it reads the config
+
+| Placeholder | Expands to (same idea as `git rev-parse`) |
+|---|---|
+| `$GIT_COMMON_DIR` | `--git-common-dir` (absolute; shared `.git` across worktrees) |
+| `$TOPLEVEL` | `--show-toplevel` (absolute; current worktree root) |
+
+These are git-vault placeholders in the config value, not shell or Git environment variables. Unknown `$NAME` / `${NAME}` forms are rejected. Placeholders may appear anywhere in the value. Prefer a **user-global** setting with `$GIT_COMMON_DIR` so each clone keeps its own key under `.git/` without repeating local config. The recommended layout is described under [Recommended practice and limits](#recommended-practice-and-limits).
 
 ```sh
-# From the repository root: absolute path via $PWD
-git config vault.identity "$PWD/.git/vaultkey.age"
+# Once per user machine (quote so the shell leaves $… alone)
+git config --global vault.identity '$GIT_COMMON_DIR/vaultkey.age'
 ```
 
-This writes into the repository's Git config (typically `.git/config`), for example:
+This writes into `~/.gitconfig`, for example:
 
 ```ini
 [vault]
-	identity = /path/to/repo/.git/vaultkey.age
+	identity = $GIT_COMMON_DIR/vaultkey.age
 ```
 
-`git config --global vault.identity ...` is supported but not recommended for day-to-day use: it points every repository at the same default and encourages sharing one key across unrelated lifecycles.
+A bare absolute path in `--global` still points every repository at the same file and is not recommended for day-to-day use: it encourages sharing one private key across unrelated lifecycles.
 
 ## Recipients
 
@@ -321,15 +337,15 @@ Treat that identity as high privilege: it can decrypt the current snapshot of ev
 
 ### Recommended workflow
 
-1. **Per person, per repository clone, create a passphrase-protected identity** under the local Git directory (not pushed):
+1. **Once per machine, set a user-global default** that resolves to each clone's local key file, then **per person, per repository clone, create a passphrase-protected identity** under the local Git directory (not pushed):
 
    ```sh
+   git config --global vault.identity '$GIT_COMMON_DIR/vaultkey.age'
    age-keygen | age -p > .git/vaultkey.age
    chmod 600 .git/vaultkey.age
-   git config vault.identity "$PWD/.git/vaultkey.age"
    ```
 
-   Use one identity per person per clone—not a shared team key, and not one personal key reused across unrelated projects. Different repositories revoke access on different schedules; sharing a private key makes disposal hard. Avoid `git config --global vault.identity` for day-to-day use.
+   Use one identity per person per clone—not a shared team key, and not one personal key reused across unrelated projects. Different repositories revoke access on different schedules; sharing a private key makes disposal hard. Do not set `--global vault.identity` to a single absolute private-key path shared by every repository.
 
 2. **Give only the public key** (the `Public key: age1...` line from `age-keygen`) to the repository administrator. Do not send the identity file or the passphrase.
 
@@ -623,7 +639,7 @@ With `-f`, skip the comparison and identity, and delete the current file at each
 git vault version
 ```
 
-Print the version hardcoded in the script, such as `0.10.0`. No repository or age installation is required.
+Print the version hardcoded in the script, such as `0.11.0`. No repository or age installation is required.
 
 | Option | Purpose |
 | --- | --- |

@@ -58,7 +58,8 @@ assert_config_rejected() {
     git vault restore -a -f -i "$KEY1"
     git config --unset-all vault.identity
 }
-for invalid in - relative/key "$TEST_ROOT/absent" '~git_vault_nonexistent_test_user/key'; do
+for invalid in - relative/key "$TEST_ROOT/absent" '~git_vault_nonexistent_test_user/key' \
+    '$UNKNOWN/key' '$HOME/.git/vaultkey.age'; do
     assert_config_rejected "$invalid"
 done
 assert_config_rejected $'/bad\ncommand\n/path'
@@ -67,6 +68,38 @@ expect_exit 1 git vault restore -a -f -i '~git_vault_nonexistent_test_user/key'
 if grep -Fq Traceback "$TEST_ROOT/last.stderr"; then
     fail 'Invalid CLI identity produced a traceback'
 fi
+
+# Placeholders expand to this repository; a global default can still be per-clone.
+cp "$KEY1" .git/vaultkey.age
+chmod 600 .git/vaultkey.age
+git config --file "$TEST_ROOT/global.config" vault.identity '$GIT_COMMON_DIR/vaultkey.age'
+scoped_vault vault restore -a -f
+assert_restored
+git config --file "$TEST_ROOT/global.config" vault.identity '${GIT_COMMON_DIR}/vaultkey.age'
+scoped_vault vault restore -a -f
+assert_restored
+git config --file "$TEST_ROOT/global.config" vault.identity '$TOPLEVEL/.git/vaultkey.age'
+scoped_vault vault restore -a -f
+assert_restored
+# Placeholder may appear mid-string (brace form after a path segment).
+mkdir -p .git/mid
+cp "$KEY1" .git/mid/vaultkey.age
+chmod 600 .git/mid/vaultkey.age
+git config --file "$TEST_ROOT/global.config" vault.identity 'pre${GIT_COMMON_DIR}/mid/vaultkey.age'
+expect_exit 1 scoped_vault vault restore -a -f
+git config --file "$TEST_ROOT/global.config" vault.identity '${GIT_COMMON_DIR}/mid/vaultkey.age'
+scoped_vault vault restore -a -f
+assert_restored
+# Linked worktree resolves COMMON_DIR to the shared .git (not the worktree .git file).
+git worktree add -q -b identity-work "$TEST_ROOT/identity-work"
+(
+    cd "$TEST_ROOT/identity-work"
+    scoped_vault vault restore -a -f
+)
+assert_restored
+git worktree remove --force "$TEST_ROOT/identity-work"
+git config --file "$TEST_ROOT/global.config" --unset-all vault.identity
+rm -rf .git/mid .git/vaultkey.age
 
 # Empty operations do not resolve config or consume the supplied stdin stream.
 git vault profiles add empty -r "$RECIPIENT1"

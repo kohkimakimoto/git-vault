@@ -16,7 +16,7 @@ import subprocess
 import sys
 import tempfile
 
-VERSION = "0.10.0"
+VERSION = "0.11.0"
 
 DEFAULT_SKILL_PATH = ".agents/skills/git-vault/SKILL.md"
 
@@ -96,7 +96,7 @@ git vault save -p production -b vault-update-secrets -- credentials.json
 AGE-SECRET-KEY-14S4CNP040N60QYYWSMGQ2225PSWKSHRCFRSW6954MY2XHC2T9U4QNV05FQ
 ```
 
-The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` comment is the matching public key. Use that public key with `-r` / recipients. Use the identity file with `-i PATH` to decrypt. To read an identity from stdin, use `-i -`. Optionally set repository-local `git config vault.identity` to an absolute path when `-i` is omitted. Prefer one passphrase-protected age identity per person per clone (`age-keygen | age -p > .git/vaultkey.age`, then `git config vault.identity "$PWD/.git/vaultkey.age"`), so the raw secret is not stored in plaintext and deleting the clone discards that working copy's key. Hand only the public key to an administrator to register on the profiles the person needs. Avoid a user-global `vault.identity` or one private key reused across repositories. For CI, use a separate plaintext identity without a passphrase. Multiple age secrets belong in one identity file. Do not combine `-i -` with `-R -`. Never read, print, or pass the private key in conversation or command arguments.
+The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` comment is the matching public key. Use that public key with `-r` / recipients. Use the identity file with `-i PATH` to decrypt. To read an identity from stdin, use `-i -`. When `-i` is omitted, use `git config vault.identity` (absolute path, `~`, or `$GIT_COMMON_DIR` / `$TOPLEVEL` placeholders). Prefer a user-global default of `$GIT_COMMON_DIR/vaultkey.age` and one passphrase-protected age identity per person per clone (`age-keygen | age -p > .git/vaultkey.age`), so the raw secret is not stored in plaintext and deleting the clone discards that working copy's key. Hand only the public key to an administrator to register on the profiles the person needs. Avoid pointing `vault.identity` at one absolute private key shared across unrelated repositories. For CI, use a separate plaintext identity without a passphrase. Multiple age secrets belong in one identity file. Do not combine `-i -` with `-R -`. Never read, print, or pass the private key in conversation or command arguments.
 
 ## Restore files
 
@@ -400,12 +400,34 @@ def expand_identity_file(value):
         raise VaultError(f"Cannot expand home directory in identity path: {value}") from None
 
 
-def expand_identity_path(value):
+IDENTITY_PLACEHOLDER_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def expand_identity_placeholders(value, mapping):
+    def replace(match):
+        name = match.group(1) or match.group(2)
+        if name not in mapping:
+            raise VaultError(f"Unknown vault.identity placeholder: ${name}")
+        return mapping[name]
+
+    return IDENTITY_PLACEHOLDER_RE.sub(replace, value)
+
+
+def expand_identity_path(value, repo):
     if not isinstance(value, str) or value == "-" or "\0" in value or "\n" in value or "\r" in value:
         raise VaultError("Invalid vault.identity path.")
-    if not (value.startswith("~") or os.path.isabs(value)):
-        raise VaultError("vault.identity must be an absolute path or start with ~.")
-    return str(expand_identity_file(value))
+    expanded = expand_identity_placeholders(
+        value,
+        {
+            "GIT_COMMON_DIR": str(repo.common_dir),
+            "TOPLEVEL": str(repo.root),
+        },
+    )
+    if not (expanded.startswith("~") or os.path.isabs(expanded)):
+        raise VaultError(
+            "vault.identity must be an absolute path, start with ~, or use $GIT_COMMON_DIR / $TOPLEVEL."
+        )
+    return str(expand_identity_file(expanded))
 
 
 def vault_identity_path(repo):
@@ -428,7 +450,7 @@ def vault_identity_path(repo):
     chosen = next((scope for scope in CONFIG_SCOPE_ORDER if any(item[0] == scope for item in entries)), None)
     if chosen is None:
         return None
-    values = [expand_identity_path(value) for scope, value in entries if scope == chosen]
+    values = [expand_identity_path(value, repo) for scope, value in entries if scope == chosen]
     if len(values) > 1:
         raise VaultError("vault.identity must be a single path; multiple values are not supported.")
     return values[0]
@@ -540,6 +562,7 @@ class Repository:
         for flag in ("--absolute-git-dir", "--git-common-dir"):
             value = self.git("rev-parse", flag).stdout.rstrip(b"\n")
             self.git_dirs.append((self.root / os.fsdecode(value)).resolve())
+        self.common_dir = self.git_dirs[1]
 
     def git(self, *args, data=None, check=True):
         return run(["git", *args], data=data, cwd=self.root, check=check)
