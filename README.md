@@ -162,11 +162,11 @@ cat /path/to/identity | git vault restore -a -i -
 # Repository-local default (absolute path; see Recommended practice and limits)
 git config vault.identity "$PWD/.git/vaultkey.age"
 
-# Restore using vault.identity (no -i; passphrase prompted when the file is protected)
+# Restore using vault.identity
 git vault restore .env
 ```
 
-`-i -` is read once per operation into a temporary file and reused for every decrypt in that operation. Do not combine `-i -` with `-R -`. Multiple age secrets belong in one identity file (age's multi-line format).
+`-i -` is read once per operation into a temporary file and reused for every decrypt in that operation.
 
 ### Passphrase-protected identity files
 
