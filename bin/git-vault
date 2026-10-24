@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Store age-encrypted files in a separate Git branch, without Python packages."""
+"""Store age-encrypted files in a separate Git branch."""
 
 import argparse
 from contextlib import contextmanager
@@ -37,27 +37,23 @@ description: Save and restore encrypted project files with git-vault, including 
 
 # git-vault
 
-Use `git vault` to manage encrypted files on a separate Git branch without switching the application checkout. Python 3.11+, Git, and age are required. Use `git vault <command> -h` for details; options follow the operation name.
+Use `git vault` to manage encrypted files on a separate Git branch. Python 3.11+, Git, and age are required. Options follow the operation: `git vault <command> -h`.
 
 Official repository: https://github.com/kohkimakimoto/git-vault
 
-Use its [README](https://github.com/kohkimakimoto/git-vault#readme) for documentation and [source code](https://github.com/kohkimakimoto/git-vault/blob/main/bin/git-vault) when command behavior or implementation details need clarification.
+Use its [README](https://github.com/kohkimakimoto/git-vault#readme) for documentation and [source code](https://github.com/kohkimakimoto/git-vault/blob/main/bin/git-vault) when behavior needs clarification.
 
 ## Check availability
-
-Before performing vault operations, check that the command can run:
 
 ```sh
 git vault version
 ```
 
-If git-vault is not installed or not found on PATH, consult the official repository's [installation instructions](https://github.com/kohkimakimoto/git-vault#installation). Research the current installation options and prerequisites for the user's environment, then propose the appropriate commands. Install it only when that is within the user's requested scope; otherwise provide the proposal and wait before attempting vault operations. If the documentation cannot be reached, explain what could not be verified instead of inventing installation steps.
-
-If the command exists but fails, inspect the error and distinguish a missing installation from Python, PATH, or other dependency problems. Use the repository as the information source for troubleshooting, and confirm `git vault version` works after installation or repair before continuing.
+If git-vault is missing from PATH, consult the official [installation instructions](https://github.com/kohkimakimoto/git-vault#installation), research options for the user's environment, and propose commands. Install only when that is within the user's requested scope; otherwise wait. If the documentation cannot be reached, say so instead of inventing steps. After install or repair, confirm `git vault version` before continuing.
 
 ## Choose the target
 
-The default local branch is `vault` and the default profile is `default`. Each profile is a root directory in that branch, with public keys at `<profile>/recipients.json` and ciphertext at `<profile>/files/<original-path>`. The branch root also has a `README.md` explaining the vault; do not treat it as application code. A recipient is who may use the secrets; each is one age public key. Profiles group files and recipients within the same branch. Before updating an existing vault, inspect its profiles, saved paths, and public keys:
+Default branch `vault`, default profile `default`. Each profile is a root directory with public keys at `<profile>/recipients.json` and ciphertext at `<profile>/files/<original-path>`. The branch root `README.md` explains the vault. A recipient is one age public key. Before updating an existing vault, inspect it:
 
 ```sh
 git vault profile list
@@ -73,18 +69,18 @@ Use the profile and branch requested by the user or established by the project; 
 git vault save -p production -m "Update application secrets" -- .env
 ```
 
-This creates a local commit on the selected branch, keeps source plaintext, and leaves the application branch and index unchanged. Unspecified files are kept. Use `-b NAME` to update an existing vault working branch.
+Creates a local commit on the selected branch and keeps source plaintext. Unspecified files are kept. Use `-b NAME` to update an existing working branch.
 
-For a pull-request workflow, create a new branch explicitly:
+For a pull-request workflow:
 
 ```sh
 git vault save -p production -b vault-update-secrets -n -B origin/vault -- .env
 git vault save -p production -b vault-update-secrets -- credentials.json
 ```
 
-`-n` requires an explicit `-b` and rejects an existing branch. `-B` requires `-n` and defaults to local `vault`; `origin/vault` must already have been fetched. Do not use `vault/update-secrets`: Git cannot have both `vault` and that name. Updating a branch checked out in any worktree is rejected.
+`-n` requires an explicit `-b` and rejects an existing branch. `-B` requires `-n` and defaults to local `vault`; fetch `origin/vault` first. Prefer names such as `vault-update-secrets` (Git cannot have both `vault` and `vault/update-secrets`). A branch checked out in any worktree cannot be updated.
 
-`save -a` re-saves every registered path in the selected profile, not new files. Use it only when the task calls for the entire profile; a missing source fails the operation. Commit messages are public. Omit `-m` for a generated message prefixed with `git-vault:`; never put secret values in a message.
+`save -a` re-saves every registered path in the profile. Use it only when the task calls for the entire profile; a missing source fails the operation. Commit messages are public. Omit `-m` for a generated `git-vault:` message; never put secret values in a message.
 
 ## Age identity files
 
@@ -96,7 +92,7 @@ git vault save -p production -b vault-update-secrets -- credentials.json
 AGE-SECRET-KEY-14S4CNP040N60QYYWSMGQ2225PSWKSHRCFRSW6954MY2XHC2T9U4QNV05FQ
 ```
 
-The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` comment is the matching public key. Use that public key with `-r` / recipients. Use the identity file with `-i PATH` to decrypt. To read an identity from stdin, use `-i -`. When `-i` is omitted, use `git config vault.identity` (`$GIT_COMMON_DIR` / `$TOPLEVEL` placeholders are supported; prefer a user-global `$GIT_COMMON_DIR/vaultkey.age`). Prefer one passphrase-protected identity per clone (`age-keygen | age -p > .git/vaultkey.age`): a passphrase helps if the key is left behind and reduces unintended use by local automation such as AI agents; a plaintext identity is also worth considering after weighing convenience and risk. Hand only the public key to a repository administrator to register on the profiles needed. Avoid pointing `vault.identity` at one absolute private key shared across unrelated repositories. For CI, use a separate plaintext identity registered only on the profiles the job needs; do not reuse a human's `.git/vaultkey.age` or passphrase. Multiple age secrets belong in one identity file. Do not combine `-i -` with `-R -`. Never read, print, or pass the private key in conversation or command arguments.
+The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` comment is the matching public key. Use that public key with `-r` / recipients. Decrypt with `-i PATH`, or `-i -` for stdin. When `-i` is omitted, use `git config vault.identity` (`$GIT_COMMON_DIR` / `$TOPLEVEL` placeholders; prefer a user-global `$GIT_COMMON_DIR/vaultkey.age`). Prefer one passphrase-protected identity per clone (`age-keygen | age -p > .git/vaultkey.age`): if the key file is left behind, it still cannot be used without the passphrase, and local automation such as AI agents is less likely to unlock it unintentionally. Hand only the public key to a repository administrator. If a clone must be removed while the identity is still needed, move or back up `.git/vaultkey.age` and reuse it in the next clone; generate a new identity and register its public key only when the file is already gone. For CI, use a separate plaintext identity registered only on the profiles the job needs. Multiple age secrets belong in one identity file. Do not combine `-i -` with `-R -`. Never read, print, or pass the private key in conversation or command arguments.
 
 ## Restore files
 
@@ -105,17 +101,17 @@ git vault restore -p production -i /path/to/identity -- .env
 git vault restore -p production -i - -- .env < /path/to/identity
 ```
 
-Select the identity with `-i` or `vault.identity`. Prefer file input for noninteractive agent execution. Do not rely on implicit stdin without `-i -`.
+Select the identity with `-i` or `vault.identity`. Prefer file input for noninteractive agent execution.
 
-Restore writes plaintext files with mode `0600`. Do not print restored secrets; inspect names and command success when contents are unnecessary to the task. `restore -a` restores the whole profile. `--revision REV` restores a historical commit reachable from the selected branch.
+Restore writes plaintext with mode `0600`. Do not print restored secrets; inspect names and command success when contents are unnecessary. `restore -a` restores the whole profile. `--revision REV` restores a historical commit reachable from the selected branch.
 
-Existing files and tracked paths are rejected by default. Use `restore -f` only when overwriting the destination, including any uncommitted changes, is within the user's requested scope. `save -f` permits tracked input and reads its working tree content, not the staged version. Neither command modifies the index or removes plaintext from application history. Do not add `-f` just to bypass an unexpected failure; inspect the reported path and intended operation first.
+Existing files and tracked paths are rejected by default. Use `restore -f` only when overwriting the destination is within the user's requested scope. `save -f` permits tracked input and reads working-tree content. Do not add `-f` just to bypass an unexpected failure; inspect the reported path first.
 
 ## Diff and clean working-tree plaintext
 
-`git vault diff` compares working-tree plaintext to the latest saved snapshot (unified diff on stdout). `git vault clean` deletes that plaintext without changing the vault branch. Both need an identity (`-i` or `vault.identity`) except `clean -f`. Default `clean` decrypts the tip and compares every existing selected path first. If any file differs, it prints those unified diffs and aborts without deleting anything. Matching files are deleted; missing paths are reported as absent. `clean -f` skips the comparison and identity, and deletes current files unconditionally (including unsaved edits, tracked files, and content restored from another profile). Unified diffs contain secrets: show them to the user or use them locally; do not paste them into chat.
+`git vault diff` compares working-tree plaintext to the latest saved snapshot (unified diff on stdout). `git vault clean` deletes that plaintext. Both need an identity (`-i` or `vault.identity`) except `clean -f`. Default `clean` compares every existing selected path to the tip first; if any differs, it prints those diffs and exits without deleting. Matching files are deleted; missing paths are reported as absent. `clean -f` deletes unconditionally. Unified diffs contain secrets: show them to the user or use them locally; do not paste them into chat.
 
-Prefer lasting `restore` for day-to-day development. For short-lived access (for example deploy), restore only the secrets that job needs, run the command, then `clean` those paths:
+Prefer lasting `restore` for day-to-day development. Deploy and similar short-lived jobs often need production secrets whose leakage is high risk, so keep plaintext on disk only while the job runs: restore only what it needs, run the command, then `clean`:
 
 ```sh
 git vault restore -p production -f .env
@@ -125,7 +121,7 @@ git vault clean -p production -f .env
 
 ## Initialize, organize, and rotate recipients
 
-Only initialize when the task calls for a new vault. `init` writes a root `README.md` on the vault branch; do not hand-edit vault trees. If `origin/vault` already exists, use that history instead of creating an independent vault:
+Only initialize when the task calls for a new vault. Prefer an existing `origin/vault` over creating an independent vault:
 
 ```sh
 git branch --track vault origin/vault
@@ -143,21 +139,21 @@ git vault remove -p production -- .env
 git vault profile remove production
 ```
 
-Provide recipients with `-r` or `-R` (not both). Optional `-l` labels keys (omit, or one label per key; blank and comment lines in `-R` do not count). Select the identity with `-i` or `vault.identity`. Labels are metadata only; identify recipients by public key.
+Provide recipients with `-r` or `-R` (not both). Optional `-l` labels keys (omit, or one label per key; blank and comment lines in `-R` are skipped). Labels are metadata; identify recipients by public key.
 
-`recipient add` and `recipient remove` decrypt every saved file in the profile, then re-encrypt for the updated public keys, and commit the list and ciphertext together. A private identity is required for that decrypt step unless the profile is empty; public keys alone cannot rewrite age ciphertext. `restore` also needs a private identity. Prefer including a master public key in every profile, and treat its private key as high privilege; do not keep the master private key in a developer clone's `.git/vaultkey.age`. Failure leaves the branch unchanged. The last public key cannot be removed. Profiles can be removed only when empty, and `default` cannot be removed. These updates also support `-b`, `-n`, and `-B` (except `init`).
+When the profile has files, `recipient add` and `recipient remove` decrypt every saved file, re-encrypt for the updated public keys, and commit the list and ciphertext together. A private identity is required unless the profile is empty. Prefer a master public key in every profile; keep its private key out of developer clones' `.git/vaultkey.age`. The last public key cannot be removed. Profiles can be removed only when empty; `default` cannot. These updates support `-b`, `-n`, and `-B` (`init` creates its own branch).
 
-`recipient remove` updates the current vault tip only. It does not revoke historical ciphertext and does not dispose of anyone's private key. Do not treat repository-side removal as complete offboarding: remove their public key, have them delete the local clone (so `.git/vaultkey.age` goes with it) and any other copies, and rotate secret values when past access must become useless even with an old identity or clone. Remote history rewrite does not control existing clones. Prefer one identity per clone so removal stops access to newly saved secrets after re-encryption and the private key can be discarded with that clone.
+`recipient remove` re-encrypts the current tip. Older commits and private keys elsewhere stay as they are. For offboarding: remove the public key, have them delete the local clone (and other copies of the identity), and rotate secret values when past access must end. Prefer one identity per clone.
 
 ## Git integration and limits
 
-Use ordinary `git fetch`, `git push`, and the project's PR process when the task includes synchronization. Local save does not authorize publishing changes. `git fetch origin` normally updates `origin/vault`, not local `vault`. When creating a working branch, select the intended current base explicitly.
+Use ordinary `git fetch`, `git push`, and the project's PR process when the task includes synchronization. `git fetch origin` normally updates `origin/vault`, not local `vault`. When creating a working branch, select the intended base explicitly.
 
-Do not auto-merge ciphertext or force-push a divergent vault. Retain the needed local changes and reapply them from the latest base. If recipients in the same profile changed since the working branch was created, re-save against the updated list before merging; a conflict-free Git merge alone does not ensure consistency.
+If vault history diverges, keep the needed local changes and reapply them from the latest base. If recipients in the same profile changed since the working branch was created, re-save against the updated list before merging.
 
-Saving keeps plaintext, restoring creates plaintext, and removal only changes the current vault snapshot. Clones and history retain old ciphertext, so deleting a file or recipient does not revoke access to past versions. File names, recipients, recipient labels, profile names, sizes, and commit metadata are public within the repository. Excluding plaintext from the application branch (for example with `.gitignore`) is the user's responsibility.
+Saving keeps plaintext; restoring creates it; removal changes only the current vault snapshot. File names, recipients, labels, profile names, sizes, and commit metadata are public. Excluding plaintext from the application branch (for example with `.gitignore`) is the user's responsibility.
 
-On failure, inspect stderr without exposing keys or plaintext. Retry from a refreshed base only after understanding the failure; do not overwrite someone else's update.
+On failure, inspect stderr without exposing keys or plaintext. Retry from a refreshed base only after understanding the failure.
 
 """
 
@@ -1045,8 +1041,8 @@ def execute(args):
 
 def parser_for_cli():
     requirements = (
-        "Requires Python 3.11+, git, and age. No Python packages are needed.\n"
-        "Plaintext exclusion is your responsibility; ignore settings are never modified."
+        "Requires Python 3.11+, git, and age.\n"
+        "Plaintext exclusion is your responsibility."
     )
     root_epilog = requirements + """
 
@@ -1063,10 +1059,10 @@ Examples:
         formatter_class=argparse.RawDescriptionHelpFormatter, allow_abbrev=False,
     )
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("version", help="Show the version.", description="Print the hardcoded version and exit.", allow_abbrev=False)
+    commands.add_parser("version", help="Show the version.", description="Print the version and exit.", allow_abbrev=False)
     skill = commands.add_parser(
         "skill", help="Print or install the git-vault agent skill.",
-        description="Print SKILL.md to stdout, or write it to a file without requiring Git or age.",
+        description="Print SKILL.md to stdout, or write it to a file.",
         epilog=(
             "Examples:\n  git vault skill\n  git vault skill -o\n"
             "  git vault skill -o .claude/skills/git-vault/SKILL.md\n"
@@ -1085,8 +1081,8 @@ Examples:
         create=False, identity=False, recipient=False, label=False, *,
         branch_help="Local branch to use (default: vault).",
         identity_help="Identity file. Use -i - for stdin, or omit and use vault.identity.",
-        recipient_r_help="Public key. Cannot be combined with -R.",
-        recipient_R_help="Recipients file; - for stdin. Cannot be combined with -r.",
+        recipient_r_help="Public key (not with -R).",
+        recipient_R_help="Recipients file; - for stdin (not with -r).",
     ):
         p = group.add_parser(
             name, description=description, help=description, epilog=requirements,
@@ -1104,7 +1100,7 @@ Examples:
             )
             messages.add_argument(
                 "-F", "--message-file", metavar="PATH",
-                help="Read a UTF-8 commit message from a file (not stdin).",
+                help="Read a UTF-8 commit message from a file.",
             )
         if create:
             p.add_argument(
@@ -1130,7 +1126,7 @@ Examples:
         if label:
             p.add_argument(
                 "-l", "--label", action="append", metavar="TEXT",
-                help="Optional label; omit, or one per key in input order. Blank and comment lines in -R do not count.",
+                help="Optional label; omit, or one per key in input order (blank and comment lines in -R are skipped).",
             )
         return p
 
@@ -1160,17 +1156,17 @@ Examples:
                 recipient_kwargs = {
                     "identity_help": (
                         "Identity for re-encryption. Use -i - for stdin, or vault.identity. "
-                        "Not needed when the profile has no files."
+                        "Optional when the profile has no files."
                     ),
                     "recipient_r_help": (
-                        "Public key to add. Cannot be combined with -R."
+                        "Public key to add (not with -R)."
                         if action == "add" else
-                        "Public key to remove. Cannot be combined with -R."
+                        "Public key to remove (not with -R)."
                     ),
                     "recipient_R_help": (
-                        "Recipients file; - for stdin. Cannot be combined with -r."
+                        "Recipients file; - for stdin (not with -r)."
                         if action == "add" else
-                        "Recipients file of keys to remove; - for stdin. Cannot be combined with -r."
+                        "Recipients file of keys to remove; - for stdin (not with -r)."
                     ),
                 }
             p = leaf(
@@ -1188,9 +1184,9 @@ Examples:
         p = leaf(
             commands, operation, operation,
             {
-                "save": "Encrypt files and commit them without changing your checkout.",
+                "save": "Encrypt files and commit them to the vault branch.",
                 "restore": "Decrypt files into the working tree.",
-                "remove": "Remove saved files from the current snapshot; keep plaintext and history.",
+                "remove": "Remove saved files from the current snapshot.",
             }[operation],
             profile=True, update=operation != "restore", create=operation != "restore", identity=operation == "restore",
         )
@@ -1202,10 +1198,9 @@ Examples:
             p.add_argument(
                 "-f", "--force", action="store_true",
                 help=(
-                    "Allow tracked input files. Read working-tree content, not the staged version; "
-                    "leave the index and application history unchanged."
+                    "Allow tracked input files. Reads working-tree content (not the index)."
                     if operation == "save" else
-                    "Overwrite existing or tracked files, including uncommitted changes. The index is unchanged."
+                    "Overwrite existing or tracked files, including uncommitted changes."
                 ),
             )
         else:
@@ -1221,7 +1216,7 @@ Examples:
     diff_parser = leaf(
         commands, "diff", "diff",
         "Compare working-tree plaintext to the latest saved snapshot; print unified diffs. "
-        "Exit 1 when any selected path differs. Absent paths are reported and are not differences.",
+        "Exit 1 when any selected path differs. Absent paths are reported.",
         profile=True, identity=True,
     )
     diff_parser.add_argument(
@@ -1234,9 +1229,9 @@ Examples:
     )
     clean_parser = leaf(
         commands, "clean", "clean",
-        "Delete working-tree plaintext for saved paths; leave the vault branch unchanged. "
+        "Delete working-tree plaintext for saved paths. "
         "Without -f, compare to the latest snapshot and abort if any path differs. "
-        "With -f, delete unconditionally without an identity.",
+        "With -f, delete unconditionally.",
         profile=True, identity=True,
     )
     clean_parser.add_argument(
@@ -1245,7 +1240,7 @@ Examples:
     )
     clean_parser.add_argument(
         "-f", "--force", action="store_true",
-        help="Delete without comparing to the vault or requiring an identity.",
+        help="Delete unconditionally.",
     )
     clean_parser.add_argument(
         "paths", nargs="*", metavar="PATH",
