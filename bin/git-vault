@@ -96,7 +96,7 @@ git vault save -p production -b vault-update-secrets -- credentials.json
 AGE-SECRET-KEY-14S4CNP040N60QYYWSMGQ2225PSWKSHRCFRSW6954MY2XHC2T9U4QNV05FQ
 ```
 
-The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` comment is the matching public key. Use that public key with `-r` / recipients. Use the identity file with `-i PATH` to decrypt. To read an identity from stdin, use `-i -`. When `-i` is omitted, use `git config vault.identity` (`$GIT_COMMON_DIR` / `$TOPLEVEL` placeholders are supported). Prefer a user-global default of `$GIT_COMMON_DIR/vaultkey.age` and one passphrase-protected age identity per clone (`age-keygen | age -p > .git/vaultkey.age`), so the raw secret is not stored in plaintext and deleting the clone discards that working copy's key. Hand only the public key to a repository administrator to register on the profiles the person needs. Avoid pointing `vault.identity` at one absolute private key shared across unrelated repositories. For CI, use a separate plaintext identity without a passphrase. Multiple age secrets belong in one identity file. Do not combine `-i -` with `-R -`. Never read, print, or pass the private key in conversation or command arguments.
+The `AGE-SECRET-KEY-...` line is the private key. The `# public key: age...` comment is the matching public key. Use that public key with `-r` / recipients. Use the identity file with `-i PATH` to decrypt. To read an identity from stdin, use `-i -`. When `-i` is omitted, use `git config vault.identity` (`$GIT_COMMON_DIR` / `$TOPLEVEL` placeholders are supported; prefer a user-global `$GIT_COMMON_DIR/vaultkey.age`). Prefer one passphrase-protected identity per clone (`age-keygen | age -p > .git/vaultkey.age`): a passphrase helps if the key is left behind and reduces unintended use by local automation such as AI agents; a plaintext identity is also worth considering after weighing convenience and risk. Hand only the public key to a repository administrator to register on the profiles needed. Avoid pointing `vault.identity` at one absolute private key shared across unrelated repositories. For CI, use a separate plaintext identity registered only on the profiles the job needs; do not reuse a human's `.git/vaultkey.age` or passphrase. Multiple age secrets belong in one identity file. Do not combine `-i -` with `-R -`. Never read, print, or pass the private key in conversation or command arguments.
 
 ## Restore files
 
@@ -113,16 +113,15 @@ Existing files and tracked paths are rejected by default. Use `restore -f` only 
 
 ## Diff and clean working-tree plaintext
 
-`git vault diff` compares working-tree plaintext to the latest saved snapshot (unified diff on stdout). `git vault clean` deletes that plaintext without changing the vault branch:
+`git vault diff` compares working-tree plaintext to the latest saved snapshot (unified diff on stdout). `git vault clean` deletes that plaintext without changing the vault branch. Both need an identity (`-i` or `vault.identity`) except `clean -f`. Default `clean` decrypts the tip and compares every existing selected path first. If any file differs, it prints those unified diffs and aborts without deleting anything. Matching files are deleted; missing paths are reported as absent. `clean -f` skips the comparison and identity, and deletes current files unconditionally (including unsaved edits, tracked files, and content restored from another profile). Unified diffs contain secrets: show them to the user or use them locally; do not paste them into chat.
+
+Prefer lasting `restore` for day-to-day development. For short-lived access (for example deploy), restore only the secrets that job needs, run the command, then `clean` those paths:
 
 ```sh
-git vault diff -p production -a
-git vault clean -p production -a
+git vault restore -p production -f .env
+./deploy.sh
+git vault clean -p production -f .env
 ```
-
-Both need an identity (`-i` or `vault.identity`) except `clean -f`. Default `clean` decrypts the tip and compares every existing selected path first. If any file differs, it prints those unified diffs and aborts without deleting anything. Matching files are deleted; missing paths are reported as absent. `clean -f` skips the comparison and identity, and deletes current files unconditionally (including unsaved edits, tracked files, and content restored from another profile). Unified diffs contain secrets: show them to the user or use them locally; do not paste them into chat.
-
-Prefer lasting `restore` for day-to-day development. For short-lived access (for example deploy), restore, run your command, then `clean` in your own script so plaintext does not linger.
 
 ## Initialize, organize, and rotate recipients
 
@@ -156,7 +155,7 @@ Use ordinary `git fetch`, `git push`, and the project's PR process when the task
 
 Do not auto-merge ciphertext or force-push a divergent vault. Retain the needed local changes and reapply them from the latest base. If recipients in the same profile changed since the working branch was created, re-save against the updated list before merging; a conflict-free Git merge alone does not ensure consistency.
 
-Ignore settings are the user's responsibility; git-vault does not manage them. Saving keeps plaintext, restoring creates plaintext, and removal only changes the current vault snapshot. Clones and history retain old ciphertext, so deleting a file or recipient does not revoke access to past versions. File names, recipients, recipient labels, profile names, sizes, and commit metadata are public within the repository.
+Saving keeps plaintext, restoring creates plaintext, and removal only changes the current vault snapshot. Clones and history retain old ciphertext, so deleting a file or recipient does not revoke access to past versions. File names, recipients, recipient labels, profile names, sizes, and commit metadata are public within the repository. Excluding plaintext from the application branch (for example with `.gitignore`) is the user's responsibility.
 
 On failure, inspect stderr without exposing keys or plaintext. Retry from a refreshed base only after understanding the failure; do not overwrite someone else's update.
 
