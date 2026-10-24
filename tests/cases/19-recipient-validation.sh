@@ -16,12 +16,12 @@ expect_exit 2 git vault init -b mixed -r "$RECIPIENT1" -R "$KEY1"
 expect_exit 2 git vault init -b repeated-r -r "$RECIPIENT1" --recipient "$RECIPIENT2"
 expect_exit 2 git vault init -b repeated-R -R "$KEY1" --recipients-file "$KEY2"
 expect_exit 2 git vault restore -a -i "$KEY1" --identity "$KEY2"
-expect_exit 2 git vault profiles add missing
-expect_exit 2 git vault recipients add
-expect_exit 2 git vault recipients remove
+expect_exit 2 git vault profile add missing
+expect_exit 2 git vault recipient add
+expect_exit 2 git vault recipient remove
 printf '# Team keys\n\n%s\n# Spare key\n%s\n\n' "$RECIPIENT2" "$RECIPIENT1" >"$TEST_ROOT/recipients.txt"
 git vault init -b from-file -R "$TEST_ROOT/recipients.txt" -l spare -l master
-assert_eq "$(git vault recipients list -b from-file | sort)" "$(printf '%s\n' "$RECIPIENT2  spare" "$RECIPIENT1  master" | sort)"
+assert_eq "$(git vault recipient list -b from-file | sort)" "$(printf '%s\n' "$RECIPIENT2  spare" "$RECIPIENT1  master" | sort)"
 printf '# No keys\n\n' >"$TEST_ROOT/empty.txt"
 expect_exit 2 git vault init -b empty -R "$TEST_ROOT/empty.txt"
 expect_exit 2 git vault init -b labels -R "$TEST_ROOT/recipients.txt" -l missing
@@ -79,12 +79,12 @@ for fixture in "$TEST_ROOT"/invalid-*.json; do
     unset GIT_INDEX_FILE
     commit="$(printf 'Malformed fixture\n' | git commit-tree "$tree")"
     git update-ref refs/heads/invalid-json "$commit"
-    expect_exit 1 git vault recipients list -b invalid-json
+    expect_exit 1 git vault recipient list -b invalid-json
     [[ "$(cat "$TEST_ROOT/last.stderr")" == *'Invalid recipients file'* ]] || fail "Malformed JSON was not rejected: $fixture"
 done
 # -R - reads recipients from stdin.
 printf '%s\n' "$RECIPIENT2" | git vault init -b from-stdin -R -
-assert_eq "$(git vault recipients list -b from-stdin)" "$RECIPIENT2"
+assert_eq "$(git vault recipient list -b from-stdin)" "$RECIPIENT2"
 # Reject non-age public keys before calling age.
 printf '%s\n' "$RECIPIENT1" 'not-an-age-recipient' >"$TEST_ROOT/unsupported.txt"
 expect_exit 2 git vault init -b unsupported -R "$TEST_ROOT/unsupported.txt"

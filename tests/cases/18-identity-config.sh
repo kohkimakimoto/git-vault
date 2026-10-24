@@ -102,7 +102,7 @@ git config --file "$TEST_ROOT/global.config" --unset-all vault.identity
 rm -rf .git/mid .git/vaultkey.age
 
 # Empty operations do not resolve config or consume the supplied stdin stream.
-git vault profiles add empty -r "$RECIPIENT1"
+git vault profile add empty -r "$RECIPIENT1"
 git config vault.identity relative/invalid
 exec 3<"$KEY1"
 git vault restore -p empty -a -i - <&3
@@ -110,17 +110,17 @@ assert_eq "$(cat <&3)" "$(cat "$KEY1")"
 exec 3<&-
 git vault restore -p empty -a
 exec 3<"$KEY1"
-git vault recipients add -p empty -r "$RECIPIENT2" -i - <&3
+git vault recipient add -p empty -r "$RECIPIENT2" -i - <&3
 assert_eq "$(cat <&3)" "$(cat "$KEY1")"
 exec 3<&-
-git vault recipients remove -p empty -r "$RECIPIENT2"
+git vault recipient remove -p empty -r "$RECIPIENT2"
 git config --unset-all vault.identity
 
 # A single stdin identity must decrypt all files during recipient changes.
-git vault recipients add -r "$RECIPIENT2" -i - <"$KEY1"
+git vault recipient add -r "$RECIPIENT2" -i - <"$KEY1"
 git vault restore -a -f -i "$KEY2"
 assert_restored
-git vault recipients remove -r "$RECIPIENT1" -i - <"$KEY2"
+git vault recipient remove -r "$RECIPIENT1" -i - <"$KEY2"
 git vault restore -a -f -i "$KEY2"
 assert_restored
 expect_exit 1 git vault restore -a -f -i "$KEY1"

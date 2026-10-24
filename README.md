@@ -106,7 +106,7 @@ Profiles group files and [recipients](#recipients) (public keys) in the same vau
 
 ```sh
 # Create a production profile with its own public key
-git vault profiles add production -r age...
+git vault profile add production -r age...
 
 # Encrypt .env into the production profile
 git vault save -p production .env
@@ -115,7 +115,7 @@ git vault save -p production .env
 git vault list -p production
 
 # List all profiles on the vault branch
-git vault profiles list
+git vault profile list
 
 # Restore .env from production, overwriting if it already exists
 git vault restore -p production -f .env
@@ -140,12 +140,12 @@ git vault clean -p production -a
 git vault remove -p production .env
 
 # Only empty, non-default profiles can be removed.
-git vault profiles remove production
+git vault profile remove production
 ```
 
 ## Private key input
 
-Identity is required when decrypting: `restore`, `diff`, default `clean` (not `clean -f`), or `recipients add` / `remove` when the profile has files. Resolve it as follows:
+Identity is required when decrypting: `restore`, `diff`, default `clean` (not `clean -f`), or `recipient add` / `remove` when the profile has files. Resolve it as follows:
 
 1. `-i` / `--identity PATH`. Use `-i -` to read an identity from stdin. Overrides `vault.identity`.
 2. Otherwise `git config vault.identity` (see below).
@@ -202,34 +202,34 @@ Each profile stores recipients as JSON at `<profile>/recipients.json`. CLI input
 
 ```sh
 # List recipients in the production profile
-git vault recipients list -p production
+git vault recipient list -p production
 
 # Same list as canonical JSON
-git vault recipients list -p production --json
+git vault recipient list -p production --json
 
 # Add a public key with a label (re-encrypts saved files when needed)
-git vault recipients add -p production -l "deploy bot" -r age...
+git vault recipient add -p production -l "deploy bot" -r age...
 
 # Add public keys from a recipients file
-git vault recipients add -p production -R teammates.txt
+git vault recipient add -p production -R teammates.txt
 
 # Remove a public key (re-encrypts saved files when needed)
-git vault recipients remove -p production -r age...
+git vault recipient remove -p production -r age...
 
 # Initialize a vault from a recipients file instead of -r
 git vault init -R teammates.txt
 ```
 
-Provide recipients with `-r KEY` or `-R PATH` (the two cannot be combined). `-R` may list several keys, one per line. Optional `-l` / `--label` attaches a non-unique description when adding via `init`, `profiles add`, or `recipients add`: omit labels, or pass one label per key. For `-R`, labels follow the file's key order, excluding empty lines and comment lines. Labels cannot be changed later except by removing and re-adding the recipient.
+Provide recipients with `-r KEY` or `-R PATH` (the two cannot be combined). `-R` may list several keys, one per line. Optional `-l` / `--label` attaches a non-unique description when adding via `init`, `profile add`, or `recipient add`: omit labels, or pass one label per key. For `-R`, labels follow the file's key order, excluding empty lines and comment lines. Labels cannot be changed later except by removing and re-adding the recipient.
 
-`recipients add` and `recipients remove` do not only edit the public key list. When the profile has saved files, git-vault must **decrypt every ciphertext with a private identity, then re-encrypt it for the updated public keys**, and commit the new list and ciphertexts together. That is why a private key is required unless the profile is empty: age ciphertext cannot be rewritten from public keys alone. If any decryption or encryption fails, the branch is not updated. The last public key cannot be removed.
+`recipient add` and `recipient remove` do not only edit the public key list. When the profile has saved files, git-vault must **decrypt every ciphertext with a private identity, then re-encrypt it for the updated public keys**, and commit the new list and ciphertexts together. That is why a private key is required unless the profile is empty: age ciphertext cannot be rewritten from public keys alone. If any decryption or encryption fails, the branch is not updated. The last public key cannot be removed.
 
 Among CLI commands, only these operations need a private identity:
 
-- `recipients add` / `recipients remove` — decrypt then re-encrypt (when files exist)
+- `recipient add` / `recipient remove` — decrypt then re-encrypt (when files exist)
 - `restore` — decrypt into the working tree
 
-`save`, `init`, `profiles add`, and similar commands use public keys only.
+`save`, `init`, `profile add`, and similar commands use public keys only.
 
 ## Commit messages
 
@@ -278,7 +278,7 @@ git push origin vault-update-db
 
 Create a pull request from `vault-update-db` to `vault` using your hosting service. If `-B` is omitted, new branches start from the local `vault` branch. `-n` requires an explicit `-b`, and fails if that branch already exists. `-B` requires `-n`.
 
-Working branches are also available for `remove`, `profiles add/remove`, and `recipients add/remove`. Creation is committed only after the operation succeeds. A vault branch checked out in any worktree cannot be updated by git-vault.
+Working branches are also available for `remove`, `profile add/remove`, and `recipient add/remove`. Creation is committed only after the operation succeeds. A vault branch checked out in any worktree cannot be updated by git-vault.
 
 Git cannot have both `vault` and `vault/update-db` branches. Use names such as `vault-update-db` for working branches.
 
@@ -315,7 +315,7 @@ The recommended practice below is designed so that local disposal is easy to do 
 
 ### Master key
 
-Repository administrators should include one privileged public key in **every** profile (for example at `init` and each `profiles add`), and keep that identity available for `recipients add` / `remove` and emergency restore across profiles.
+Repository administrators should include one privileged public key in **every** profile (for example at `init` and each `profile add`), and keep that identity available for `recipient add` / `remove` and emergency restore across profiles.
 
 Treat that identity as high privilege: it can decrypt the current snapshot of every profile where it is listed. Store it offline or with strict access control, prefer a clear `-l` label such as `master`, and avoid using it as the day-to-day key for routine restore when a narrower key is enough. Do not keep the master private key in a developer clone's `.git/vaultkey.age`.
 
@@ -342,7 +342,7 @@ Treat that identity as high privilege: it can decrypt the current snapshot of ev
 
 3. **Give only the public key** (the `Public key: age1...` line from `age-keygen`) to the repository administrator. Do not send the identity file or the passphrase.
 
-4. **The repository administrator registers that public key** on the profiles the person needs (`recipients add`, or at `init` / `profiles add`), using a [master identity](#master-key) when the profile already has files. Register the person only on profiles they should decrypt—narrow when you can; the same public key may be listed on more than one profile when that matches how they work.
+4. **The repository administrator registers that public key** on the profiles the person needs (`recipient add`, or at `init` / `profile add`), using a [master identity](#master-key) when the profile already has files. Register the person only on profiles they should decrypt—narrow when you can; the same public key may be listed on more than one profile when that matches how they work.
 
 5. **Fetch or update the local `vault` branch** from the remote (see [Cloning and synchronization](#cloning-and-synchronization)).
 
@@ -360,9 +360,9 @@ Treat that identity as high privilege: it can decrypt the current snapshot of ev
 
 Deleting the clone directory removes that working copy's `.git/vaultkey.age`. It does not dispose of copies elsewhere (other machines, backups, or a second clone). If you discard a clone while still developing, generate a new identity for the next clone and have the repository administrator register the new public key.
 
-### What `recipients remove` does not do
+### What `recipient remove` does not do
 
-`recipients remove` updates the **current** vault tip only: it re-encrypts saved files for the remaining public keys and commits that snapshot. It does **not**:
+`recipient remove` updates the **current** vault tip only: it re-encrypts saved files for the remaining public keys and commits that snapshot. It does **not**:
 
 - Revoke access to historical commits (ciphertext in older commits stays encrypted to whoever was listed then)
 - Dispose of anyone's private key
@@ -373,7 +373,7 @@ Repository-side removal is easy to misread as “that identity is now useless.�
 
 When someone should lose access:
 
-1. Remove their public key from every profile that listed it (`recipients remove`), using a remaining privileged identity (typically the master key).
+1. Remove their public key from every profile that listed it (`recipient remove`), using a remaining privileged identity (typically the master key).
 2. Have them **delete the local clone from disk** so `.git/vaultkey.age` (or any plaintext identity file) for that repository goes with it. Also drop any other copies of that identity (other machines, backups, password managers, CI secrets). Keeping the folder after access is revoked leaves the private key material in place.
 3. If past values must become useless even to someone who still holds an old identity or an old clone, rotate those secret values in the application and `save` again under the updated recipients.
 
@@ -383,7 +383,7 @@ Secret management has to be designed around constraints, operational practice, a
 
 ## Command reference
 
-Options follow the operation: `git vault save -p production .env`, or `git vault recipients add -p production -r age...`.
+Options follow the operation: `git vault save -p production .env`, or `git vault recipient add -p production -r age...`.
 
 Paths are relative to the current directory; `-a` uses stored repository-relative paths. Use `--` before file names beginning with `-`. Force does not bypass symlink, path, or concurrent-update checks. Commit messages are public; never include secrets. When `-m` and `-F` are omitted, a message with a `git-vault:` prefix is generated.
 
@@ -405,10 +405,10 @@ Create a local orphan vault branch (default name `vault`) with a `default` profi
 | `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Cannot be combined with `-m`. |
 | `-h`, `--help` | Show help. |
 
-### `profiles list`
+### `profile list`
 
 ```sh
-git vault profiles list [options]
+git vault profile list [options]
 ```
 
 List all profiles in the selected branch.
@@ -418,10 +418,10 @@ List all profiles in the selected branch.
 | `-b`, `--branch NAME` | Local branch to use (default: `vault`). |
 | `-h`, `--help` | Show help. |
 
-### `profiles add`
+### `profile add`
 
 ```sh
-git vault profiles add [options] NAME (-r KEY | -R PATH) [-l TEXT]...
+git vault profile add [options] NAME (-r KEY | -R PATH) [-l TEXT]...
 ```
 
 Create the profile named `NAME` with its own recipients and no files. The profile must not already exist. Profile names begin with an ASCII letter or digit and contain only letters, digits, `.`, `_`, and `-`. Recipients are required via `-r` or `-R`.
@@ -438,10 +438,10 @@ Create the profile named `NAME` with its own recipients and no files. The profil
 | `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Cannot be combined with `-m`. |
 | `-h`, `--help` | Show help. |
 
-### `profiles remove`
+### `profile remove`
 
 ```sh
-git vault profiles remove [options] NAME
+git vault profile remove [options] NAME
 ```
 
 Remove the profile named `NAME`. It must be empty and cannot be `default`.
@@ -455,10 +455,10 @@ Remove the profile named `NAME`. It must be empty and cannot be `default`.
 | `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Cannot be combined with `-m`. |
 | `-h`, `--help` | Show help. |
 
-### `recipients list`
+### `recipient list`
 
 ```sh
-git vault recipients list [options]
+git vault recipient list [options]
 ```
 
 List recipients for the selected profile. Default lines are `KEY` or `KEY  LABEL`. `--json` prints the canonical stored JSON.
@@ -470,10 +470,10 @@ List recipients for the selected profile. Default lines are `KEY` or `KEY  LABEL
 | `--json` | Print recipients as canonical JSON. |
 | `-h`, `--help` | Show help. |
 
-### `recipients add`
+### `recipient add`
 
 ```sh
-git vault recipients add [options] (-r KEY | -R PATH) [-l TEXT]...
+git vault recipient add [options] (-r KEY | -R PATH) [-l TEXT]...
 ```
 
 Add public keys from `-r` / `-R`. When the profile has files, decrypt each ciphertext and re-encrypt it for the updated public keys in one commit. Existing public keys are rejected. A private identity is needed for that decrypt step unless the profile is empty.
@@ -492,10 +492,10 @@ Add public keys from `-r` / `-R`. When the profile has files, decrypt each ciphe
 | `-F`, `--message-file PATH` | Read a UTF-8 commit message file, not stdin. Cannot be combined with `-m`. |
 | `-h`, `--help` | Show help. |
 
-### `recipients remove`
+### `recipient remove`
 
 ```sh
-git vault recipients remove [options] (-r KEY | -R PATH)
+git vault recipient remove [options] (-r KEY | -R PATH)
 ```
 
 Remove public keys from `-r` / `-R`. When the profile has files, decrypt each ciphertext and re-encrypt it for the remaining public keys in one commit. Unknown keys and removal of the last public key are rejected. A private identity is needed for that decrypt step unless the profile is empty. Past commits are unchanged.

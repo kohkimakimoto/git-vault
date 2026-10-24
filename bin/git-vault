@@ -60,9 +60,9 @@ If the command exists but fails, inspect the error and distinguish a missing ins
 The default local branch is `vault` and the default profile is `default`. Each profile is a root directory in that branch, with public keys at `<profile>/recipients.json` and ciphertext at `<profile>/files/<original-path>`. The branch root also has a `README.md` explaining the vault; do not treat it as application code. A recipient is who may use the secrets; each is one age public key. Profiles group files and recipients within the same branch. Before updating an existing vault, inspect its profiles, saved paths, and public keys:
 
 ```sh
-git vault profiles list
+git vault profile list
 git vault list -p production
-git vault recipients list -p production
+git vault recipient list -p production
 ```
 
 Use the profile and branch requested by the user or established by the project; do not infer production from a filename. Paths are relative to the current directory. Prefer explicit paths when the task concerns only some files.
@@ -137,18 +137,18 @@ For a new vault or profile, obtain the intended age public keys from the user or
 ```sh
 git vault init -r age...
 git vault init -R teammates.txt -l laptop
-git vault profiles add production -r age...
-git vault recipients add -p production -i /path/to/identity -r age...
-git vault recipients remove -p production -i /path/to/identity -r age...
+git vault profile add production -r age...
+git vault recipient add -p production -i /path/to/identity -r age...
+git vault recipient remove -p production -i /path/to/identity -r age...
 git vault remove -p production -- .env
-git vault profiles remove production
+git vault profile remove production
 ```
 
 Provide recipients with `-r` or `-R` (not both). Optional `-l` labels keys (omit, or one label per key; blank and comment lines in `-R` do not count). Select the identity with `-i` or `vault.identity`. Labels are metadata only; identify recipients by public key.
 
-`recipients add` and `recipients remove` decrypt every saved file in the profile, then re-encrypt for the updated public keys, and commit the list and ciphertext together. A private identity is required for that decrypt step unless the profile is empty; public keys alone cannot rewrite age ciphertext. `restore` also needs a private identity. Prefer including a master public key in every profile, and treat its private key as high privilege; do not keep the master private key in a developer clone's `.git/vaultkey.age`. Failure leaves the branch unchanged. The last public key cannot be removed. Profiles can be removed only when empty, and `default` cannot be removed. These updates also support `-b`, `-n`, and `-B` (except `init`).
+`recipient add` and `recipient remove` decrypt every saved file in the profile, then re-encrypt for the updated public keys, and commit the list and ciphertext together. A private identity is required for that decrypt step unless the profile is empty; public keys alone cannot rewrite age ciphertext. `restore` also needs a private identity. Prefer including a master public key in every profile, and treat its private key as high privilege; do not keep the master private key in a developer clone's `.git/vaultkey.age`. Failure leaves the branch unchanged. The last public key cannot be removed. Profiles can be removed only when empty, and `default` cannot be removed. These updates also support `-b`, `-n`, and `-B` (except `init`).
 
-`recipients remove` updates the current vault tip only. It does not revoke historical ciphertext and does not dispose of anyone's private key. Do not treat repository-side removal as complete offboarding: remove their public key, have them delete the local clone (so `.git/vaultkey.age` goes with it) and any other copies, and rotate secret values when past access must become useless even with an old identity or clone. Remote history rewrite does not control existing clones. Prefer one identity per clone so removal stops access to newly saved secrets after re-encryption and the private key can be discarded with that clone.
+`recipient remove` updates the current vault tip only. It does not revoke historical ciphertext and does not dispose of anyone's private key. Do not treat repository-side removal as complete offboarding: remove their public key, have them delete the local clone (so `.git/vaultkey.age` goes with it) and any other copies, and rotate secret values when past access must become useless even with an old identity or clone. Remote history rewrite does not control existing clones. Prefer one identity per clone so removal stops access to newly saved secrets after re-encryption and the private key can be discarded with that clone.
 
 ## Git integration and limits
 
@@ -746,9 +746,9 @@ def message_for(args, paths=()):
         operation = args.operation
         if operation == "init":
             title = "Initialize vault"
-        elif operation.startswith("profiles-"):
+        elif operation.startswith("profile-"):
             title = f"{operation.split('-')[1].capitalize()} profile {args.name}"
-        elif operation.startswith("recipients-"):
+        elif operation.startswith("recipient-"):
             title = f"{operation.split('-')[1].capitalize()} recipients in profile {args.profile}"
         else:
             title = f"{operation.capitalize()} files in profile {args.profile}"
@@ -920,7 +920,7 @@ def execute(args):
     ref = repo.branch_ref(branch)
     old_oid = repo.branch_oid(ref)
     update = args.operation not in (
-        "list", "restore", "clean", "diff", "profiles-list", "recipients-list",
+        "list", "restore", "clean", "diff", "profile-list", "recipient-list",
     )
     if update:
         repo.ensure_not_checked_out(ref)
@@ -940,7 +940,7 @@ def execute(args):
     else:
         if not old_oid:
             if args.operation in (
-                "list", "restore", "clean", "diff", "profiles-list", "recipients-list",
+                "list", "restore", "clean", "diff", "profile-list", "recipient-list",
             ):
                 raise VaultError(f"Branch does not exist: {branch}.")
             raise VaultError(f"Branch does not exist: {branch}. Use init or --new-branch.")
@@ -951,7 +951,7 @@ def execute(args):
         if repo.git("merge-base", "--is-ancestor", source, parent, check=False).returncode:
             raise VaultError("Revision is not reachable from the selected branch.")
     profiles = repo.load(source)
-    if args.operation.startswith("profiles-"):
+    if args.operation.startswith("profile-"):
         action = args.operation.split("-")[1]
         if action == "list":
             print("\n".join(sorted(profiles)))
@@ -974,16 +974,16 @@ def execute(args):
     if args.profile not in profiles:
         raise VaultError(f"Profile does not exist: {args.profile}")
     profile = profiles[args.profile]
-    if args.operation == "recipients-list":
+    if args.operation == "recipient-list":
         if getattr(args, "json", False):
             sys.stdout.write(dump_recipients_json(profile.recipients))
         else:
             print("\n".join(format_recipient_line(key, label) for key, label in profile.recipients))
         return
-    if args.operation.startswith("recipients-"):
+    if args.operation.startswith("recipient-"):
         check_recipient_stdin(args)
         existing = dict(profile.recipients)
-        if args.operation == "recipients-add":
+        if args.operation == "recipient-add":
             supplied = dict(recipients_from_cli(args))
             if existing.keys() & supplied.keys():
                 raise VaultError("A public key is already present.")
@@ -1140,11 +1140,11 @@ Examples:
         update=True, recipient=True, label=True,
         branch_help="Local branch to create (default: vault).",
     )
-    for name in ("profiles", "recipients"):
-        group_parser = commands.add_parser(name, help=f"Manage {name}.")
+    for name in ("profile", "recipient"):
+        group_parser = commands.add_parser(name, help=f"Manage {name}s.")
         group = group_parser.add_subparsers(dest="action", required=True)
-        listed = leaf(group, "list", name + "-list", f"List {name}.", profile=name == "recipients")
-        if name == "recipients":
+        listed = leaf(group, "list", name + "-list", f"List {name}s.", profile=name == "recipient")
+        if name == "recipient":
             listed.add_argument("--json", action="store_true", help="Print recipients as canonical JSON.")
         profile_actions = {
             "add": "Create a profile with recipients and no files.",
@@ -1155,9 +1155,9 @@ Examples:
             "remove": "Remove recipients; re-encrypt saved files when needed.",
         }
         for action in ("add", "remove"):
-            description = (profile_actions if name == "profiles" else recipient_actions)[action]
+            description = (profile_actions if name == "profile" else recipient_actions)[action]
             recipient_kwargs = {}
-            if name == "recipients":
+            if name == "recipient":
                 recipient_kwargs = {
                     "identity_help": (
                         "Identity for re-encryption. Use -i - for stdin, or vault.identity. "
@@ -1176,13 +1176,13 @@ Examples:
                 }
             p = leaf(
                 group, action, name + "-" + action, description,
-                profile=name == "recipients", update=True, create=True,
-                identity=name == "recipients",
-                recipient=(name == "profiles" and action == "add") or (name == "recipients"),
-                label=(name == "profiles" and action == "add") or (name == "recipients" and action == "add"),
+                profile=name == "recipient", update=True, create=True,
+                identity=name == "recipient",
+                recipient=(name == "profile" and action == "add") or (name == "recipient"),
+                label=(name == "profile" and action == "add") or (name == "recipient" and action == "add"),
                 **recipient_kwargs,
             )
-            if name == "profiles":
+            if name == "profile":
                 p.add_argument("name", metavar="NAME", help="Profile name.")
     leaf(commands, "list", "list", "List saved paths in a profile.", profile=True)
     for operation in ("save", "restore", "remove"):
