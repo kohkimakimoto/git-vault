@@ -37,7 +37,7 @@ Place [`bin/git-vault`](bin/git-vault) somewhere on your `PATH` and make it exec
 
 ## Quick start
 
-This example encrypts and saves a `.env` file that holds application secrets. A passphrase-protected identity under each clone's local `.git` directory is recommended; see [Recommended practice and limits](#recommended-practice-and-limits).
+This example encrypts and saves a `.env` file that holds application secrets. A passphrase-protected identity (private key) under each clone's local `.git` directory is recommended; see [Recommended practice and limits](#recommended-practice-and-limits).
 
 Once, set a user-global default so every repository looks for that per-clone key (quote the value so your shell does not expand `$…`):
 
@@ -45,7 +45,7 @@ Once, set a user-global default so every repository looks for that per-clone key
 git config --global vault.identity '$GIT_COMMON_DIR/vaultkey.age'
 ```
 
-`$GIT_COMMON_DIR` is a git-vault placeholder (not an environment variable); it expands to the absolute path from `git rev-parse --git-common-dir` (the shared `.git` directory, including in linked worktrees). See [`vault.identity`](#vaultidentity).
+`$GIT_COMMON_DIR` is a git-vault placeholder (not an environment variable); it expands to the absolute path from `git rev-parse --git-common-dir`. See [`vault.identity`](#vaultidentity).
 
 From the root of your application repository, create the identity:
 
@@ -143,10 +143,6 @@ git vault remove -p production .env
 git vault profiles remove production
 ```
 
-`save -a` does not discover new files. Register them with explicit paths first. If any registered source file is missing, the entire save fails.
-
-Use `restore` for day-to-day profiles you keep decrypted while developing. For short-lived access (for example deploy), restore what you need, run your command, then `clean` in your own script.
-
 ## Private key input
 
 Identity is required when decrypting: `restore`, `diff`, default `clean` (not `clean -f`), or `recipients add` / `remove` when the profile has files. Resolve it as follows:
@@ -173,30 +169,16 @@ git vault restore .env
 
 `-i -` is read once per operation into a temporary file and reused for every decrypt in that operation.
 
-### Passphrase-protected identity files
-
-Following [age](https://github.com/FiloSottile/age)'s examples, keep a plaintext identity as `.txt` and a passphrase-protected one as `.age`. Day-to-day human use should prefer `.git/vaultkey.age` (see [Recommended practice and limits](#recommended-practice-and-limits)). git-vault accepts either form for `-i` and `vault.identity`.
-
-```sh
-git config --global vault.identity '$GIT_COMMON_DIR/vaultkey.age'
-age-keygen | age -p > .git/vaultkey.age
-chmod 600 .git/vaultkey.age
-```
-
 ### `vault.identity`
 
-Set a default identity file path with `git config`. The value may be:
-
-- an **absolute path**
-- a path starting with `~`
-- a path containing `$GIT_COMMON_DIR` or `$TOPLEVEL` (also `${…}`), which git-vault expands when it reads the config
+Set a default identity file path with `git config`. The value may contain `$GIT_COMMON_DIR` or `$TOPLEVEL` (also `${…}`), which git-vault expands when it reads the config.
 
 | Placeholder | Expands to (same idea as `git rev-parse`) |
 |---|---|
-| `$GIT_COMMON_DIR` | `--git-common-dir` (absolute; shared `.git` across worktrees) |
-| `$TOPLEVEL` | `--show-toplevel` (absolute; current worktree root) |
+| `$GIT_COMMON_DIR` | `--git-common-dir` (absolute) |
+| `$TOPLEVEL` | `--show-toplevel` (absolute) |
 
-These are git-vault placeholders in the config value, not shell or Git environment variables. Unknown `$NAME` / `${NAME}` forms are rejected. Placeholders may appear anywhere in the value. Prefer a **user-global** setting with `$GIT_COMMON_DIR` so each clone keeps its own key under `.git/` without repeating local config. The recommended layout is described under [Recommended practice and limits](#recommended-practice-and-limits).
+These are git-vault placeholders in the config value, not shell or environment variables. Unknown `$NAME` / `${NAME}` forms are rejected. Prefer a **user-global** setting with `$GIT_COMMON_DIR` so each clone keeps its own key under `.git/` without repeating local config. The recommended layout is described under [Recommended practice and limits](#recommended-practice-and-limits).
 
 ```sh
 # Once per user machine (quote so the shell leaves $… alone)
@@ -327,47 +309,56 @@ For pull requests, reapply changes if recipients in the same profile changed sin
 
 ## Recommended practice and limits
 
-git-vault stores ciphertext in Git history. Removing a recipient from the current tip does **not** make that identity useless against older commits, and rewriting or deleting remote history cannot control every clone that already exists. Treat access control as: current tip ACL, private-key custody, and (when needed) rotating the underlying secret values—not as complete cryptographic erasure of the past.
+git-vault stores ciphertext in Git history, and every clone receives those objects. Removing a recipient from the current tip does **not** make that identity useless against older commits, and rewriting or deleting remote history cannot control copies that already exist. Cutting off access to secrets from the remote alone is therefore difficult. Access also depends on whether clones and private keys still exist locally—something the remote cannot enforce.
+
+The recommended practice below is designed so that local disposal is easy to do correctly: one identity per repository clone. That scopes each key to a single project lifecycle, makes disposal concrete (delete the clone and its local identity file), and reduces forgotten keys or unintentional reuse across unrelated repositories. The following sections describe that approach.
 
 ### Master key
 
-Include one privileged public key in **every** profile (for example at `init` and each `profiles add`), and keep that identity available for `recipients add` / `remove` and emergency restore across profiles.
+Repository administrators should include one privileged public key in **every** profile (for example at `init` and each `profiles add`), and keep that identity available for `recipients add` / `remove` and emergency restore across profiles.
 
 Treat that identity as high privilege: it can decrypt the current snapshot of every profile where it is listed. Store it offline or with strict access control, prefer a clear `-l` label such as `master`, and avoid using it as the day-to-day key for routine restore when a narrower key is enough. Do not keep the master private key in a developer clone's `.git/vaultkey.age`.
 
 ### Recommended workflow
 
-1. **Once per machine, set a user-global default** that resolves to each clone's local key file, then **per person, per repository clone, create a passphrase-protected identity** under the local Git directory (not pushed):
+1. Developers who clone the repository: once per machine, set a user-global default so every repository looks for that clone's local key file (quote the value so your shell does not expand `$…`):
 
    ```sh
    git config --global vault.identity '$GIT_COMMON_DIR/vaultkey.age'
+   ```
+
+   Do not set `--global vault.identity` to a single absolute private-key path shared by every repository.
+
+2. **Per repository clone, create a passphrase-protected identity** under the local Git directory:
+
+   ```sh
    age-keygen | age -p > .git/vaultkey.age
    chmod 600 .git/vaultkey.age
    ```
 
-   Use one identity per person per clone—not a shared team key, and not one personal key reused across unrelated projects. Different repositories revoke access on different schedules; sharing a private key makes disposal hard. Do not set `--global vault.identity` to a single absolute private-key path shared by every repository.
+   Use one identity per clone—not a shared team key, and not one personal key reused across unrelated projects. Different repositories revoke access on different schedules; sharing a private key makes disposal hard.
 
-2. **Give only the public key** (the `Public key: age1...` line from `age-keygen`) to the repository administrator. Do not send the identity file or the passphrase.
+   A passphrase is recommended because it helps if you forget to dispose of the key, and it reduces unintended use by local automation such as AI agents. Evaluate convenience against that risk; a plaintext identity is also worth considering.
 
-3. **The administrator registers that public key** on the profiles the person needs (`recipients add`, or at `init` / `profiles add`), using a [master identity](#master-key) when the profile already has files. Register the person only on profiles they should decrypt—narrow when you can; the same public key may be listed on more than one profile when that matches how they work.
+3. **Give only the public key** (the `Public key: age1...` line from `age-keygen`) to the repository administrator. Do not send the identity file or the passphrase.
 
-4. **Fetch or update the local `vault` branch** from the remote (see [Cloning and synchronization](#cloning-and-synchronization)). git-vault never fetches or pushes itself.
+4. **The repository administrator registers that public key** on the profiles the person needs (`recipients add`, or at `init` / `profiles add`), using a [master identity](#master-key) when the profile already has files. Register the person only on profiles they should decrypt—narrow when you can; the same public key may be listed on more than one profile when that matches how they work.
 
-5. **Development:** `restore` the profiles and paths you need for ongoing work. Those plaintext files stay in the working tree until you delete them yourself or run `clean`. Exclude plaintext from the application branch (for example with `.gitignore`); git-vault does not manage ignores.
+5. **Fetch or update the local `vault` branch** from the remote (see [Cloning and synchronization](#cloning-and-synchronization)).
 
-6. **Deploy or other short-lived use:** `restore` the production (or other) profile, run the deploy or tool, then `clean` that profile so plaintext does not linger:
+6. **Development:** `restore` the profiles and paths you need for ongoing work. Those plaintext files stay in the working tree until you delete them yourself or run `clean`. Exclude plaintext from the application branch (for example with `.gitignore`).
+
+7. **Deploy or other short-lived use:** restore only the secrets that job needs, run the command, then `clean` those paths so plaintext does not linger:
 
    ```sh
-   git vault restore -p production -a -f
+   git vault restore -p production -f .env
    ./deploy.sh
-   git vault clean -p production -a
+   git vault clean -p production -f .env
    ```
 
-   Default `clean` compares each existing path to the latest snapshot and aborts if any differ; use `clean -f` only when discarding divergent plaintext is intentional. `clean` does not change the vault branch. It is best-effort (for example `kill -9` can leave files behind)—pair it with ordinary care, not with an expectation of secure erase.
+8. **Automation (CI, bots):** non-interactive jobs usually cannot unlock a passphrase-protected identity. Use a **separate plaintext identity** registered only on the profiles the job needs. Do not reuse a human's `.git/vaultkey.age` or passphrase in CI.
 
-7. **Automation (CI, bots):** non-interactive jobs usually cannot unlock a passphrase-protected identity. Use a **separate plaintext identity** (age's `.txt` form, or the same material injected as a CI secret file) registered only on the profiles the job needs, with a short lifetime and normal secret-store rotation. Do not reuse a human's `.git/vaultkey.age` or passphrase in CI.
-
-Deleting the clone directory removes that working copy's `.git/vaultkey.age`. It does not dispose of copies elsewhere (other machines, backups, or a second clone). If you discard a clone while still developing, generate a new identity for the next clone and have the administrator register the new public key.
+Deleting the clone directory removes that working copy's `.git/vaultkey.age`. It does not dispose of copies elsewhere (other machines, backups, or a second clone). If you discard a clone while still developing, generate a new identity for the next clone and have the repository administrator register the new public key.
 
 ### What `recipients remove` does not do
 
