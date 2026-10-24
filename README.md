@@ -612,7 +612,7 @@ With `-f`, delete the current file at each selected path unconditionally (includ
 git vault version
 ```
 
-Print the version (currently `0.11.0`).
+Print the version.
 
 | Option | Purpose |
 | --- | --- |
