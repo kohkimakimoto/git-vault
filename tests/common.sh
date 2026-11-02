@@ -13,7 +13,7 @@ TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/git-vault-tests.XXXXXX")"
 TEST_ROOT="$(cd "$TEST_ROOT" && pwd -P)"
 trap 'rm -rf "$TEST_ROOT"' EXIT
 trap 'echo "FAIL: ${BASH_SOURCE[0]}:$LINENO" >&2' ERR
-export TEST_ROOT TESTS_DIR
+export TEST_ROOT TESTS_DIR PROJECT_DIR
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 assert_eq() { [[ "$1" == "$2" ]] || fail "Expected [$2], got [$1]"; }
