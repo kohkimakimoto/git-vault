@@ -1,35 +1,44 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
+import { isLocale, type Locale } from '../i18n/config';
+import { getMessages, localizedPath } from '../i18n/utils';
 
 export type DocEntry = CollectionEntry<'docs'>;
+export const DOC_SECTIONS = ['guide', 'reference'] as const;
+export type DocSectionId = (typeof DOC_SECTIONS)[number];
 
-export const DOC_SECTIONS = [
-  { id: 'guide' as const, title: 'Guide' },
-  { id: 'reference' as const, title: 'Command reference' },
-];
+export function docIdentity(doc: DocEntry): { locale: Locale; slug: string } {
+  const [locale, ...parts] = doc.id.split('/');
+  if (!isLocale(locale) || parts.length < 2) {
+    throw new Error(`Invalid localized documentation ID: ${doc.id}`);
+  }
+  return { locale, slug: parts.join('/') };
+}
 
-export type DocSectionId = (typeof DOC_SECTIONS)[number]['id'];
-
-export async function getOrderedDocs(): Promise<DocEntry[]> {
-  const docs = await getCollection('docs');
-  const sectionRank = Object.fromEntries(DOC_SECTIONS.map((s, i) => [s.id, i]));
+export async function getOrderedDocs(locale: Locale): Promise<DocEntry[]> {
+  const docs = await getCollection('docs', (doc) => docIdentity(doc).locale === locale);
   return docs.sort((a, b) => {
-    const sectionDiff = sectionRank[a.data.section] - sectionRank[b.data.section];
-    if (sectionDiff !== 0) return sectionDiff;
-    return a.data.order - b.data.order;
+    const sectionDiff = DOC_SECTIONS.indexOf(a.data.section) - DOC_SECTIONS.indexOf(b.data.section);
+    return sectionDiff || a.data.order - b.data.order;
   });
 }
 
-export async function getDocsGroupedBySection(): Promise<
-  { id: DocSectionId; title: string; docs: DocEntry[] }[]
-> {
-  const docs = await getOrderedDocs();
-  return DOC_SECTIONS.map((section) => ({
-    ...section,
-    docs: docs.filter((doc) => doc.data.section === section.id),
+export async function getDocsGroupedBySection(locale: Locale) {
+  const docs = await getOrderedDocs(locale);
+  const messages = getMessages(locale);
+  return DOC_SECTIONS.map((id) => ({
+    id,
+    title: messages.docs[id],
+    docs: docs.filter((doc) => doc.data.section === id),
   }));
 }
 
 export function docHref(doc: DocEntry): string {
-  return `/docs/${doc.id}`;
+  const { locale, slug } = docIdentity(doc);
+  return localizedPath(locale, `/docs/${slug}`);
+}
 
+export async function getDocAlternates(doc: DocEntry) {
+  const { slug } = docIdentity(doc);
+  const translations = await getCollection('docs', (entry) => docIdentity(entry).slug === slug);
+  return translations.map((entry) => ({ locale: docIdentity(entry).locale, href: docHref(entry) }));
 }

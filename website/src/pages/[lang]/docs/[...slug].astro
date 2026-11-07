@@ -1,0 +1,15 @@
+---
+import { getCollection } from 'astro:content';
+import DocPage from '../../../components/DocPage.astro';
+import { defaultLocale } from '../../../i18n/config';
+import { docIdentity } from '../../../lib/docs';
+export async function getStaticPaths() {
+  const docs = await getCollection('docs');
+  return docs.flatMap((doc) => {
+    const { locale, slug } = docIdentity(doc);
+    return locale === defaultLocale ? [] : [{ params: { lang: locale, slug }, props: { doc } }];
+  });
+}
+const { doc } = Astro.props;
+---
+<DocPage doc={doc} />

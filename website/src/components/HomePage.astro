@@ -1,0 +1,130 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import VaultTerminalDemo from "../components/VaultTerminalDemo";
+import type { Locale } from '../i18n/config';
+import { getMessages, localizedPath } from '../i18n/utils';
+interface Props { locale: Locale }
+const { locale } = Astro.props;
+const messages = getMessages(locale);
+const home = messages.home;
+---
+
+<BaseLayout title="git-vault" locale={locale}>
+  <section class="relative overflow-x-hidden">
+    <div class="pointer-events-none absolute inset-0" aria-hidden="true">
+      <div class="absolute top-[-12%] left-[-6%] h-[70%] w-[46%] rounded-full bg-[radial-gradient(circle_at_center,var(--hero-glow-a),transparent_68%)] blur-2xl"></div>
+      <div class="absolute top-[-16%] right-[-8%] h-[75%] w-[48%] rounded-full bg-[radial-gradient(circle_at_center,var(--hero-glow-b),transparent_68%)] blur-2xl"></div>
+      <div class="home-grid home-grid-left absolute top-0 left-0 h-[72%] w-[42%]"></div>
+      <div class="home-grid home-grid-right absolute top-0 right-0 h-[78%] w-[44%]"></div>
+    </div>
+
+    <div class="relative mx-auto max-w-6xl px-4 pt-14 pb-16 sm:px-6 sm:pt-16 lg:pt-20 lg:pb-24">
+      <div>
+        <p class="animate-rise text-sm font-semibold tracking-wide text-[var(--accent)]">
+          git-vault
+        </p>
+        <h1 class:list={["animate-rise-delay-1 mt-3 text-4xl leading-tight font-semibold tracking-tight text-[var(--fg)] sm:text-5xl xl:text-6xl", locale === 'en' && 'xl:whitespace-nowrap']}>
+          {home.heading}
+        </h1>
+        <p class="animate-rise-delay-2 mt-5 max-w-2xl text-base text-[var(--fg-muted)] sm:text-lg">
+          {home.intro}
+        </p>
+        <div class="animate-rise-delay-2 mt-7 flex flex-wrap gap-3">
+          <a href={localizedPath(locale, '/docs/guide/quick-start')} class="btn-primary">
+            {home.getStarted}
+          </a>
+          <a href={localizedPath(locale, '/docs/guide/introduction')} class="btn-secondary">
+            {home.readDocs}
+          </a>
+
+
+        </div>
+      </div>
+      <div class="animate-rise-delay-2 mt-10 w-full min-w-0 sm:mt-12">
+        <VaultTerminalDemo messages={messages.demo} client:visible />
+        <p class="mt-4 text-sm text-[var(--fg-muted)]">
+          {home.demoNote}{' '}
+          <a href={localizedPath(locale, '/docs/guide/clone-and-sync')} class="text-[var(--accent)] underline underline-offset-3">{home.anotherClone}</a>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--border)] bg-[color-mix(in_oklab,var(--bg-elevated)_70%,transparent)]">
+    <div class="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
+      <h2 class="font-sans text-2xl font-bold tracking-tight text-[var(--fg)] sm:text-3xl">
+        {home.howItFits}
+      </h2>
+      <p class="mt-3 max-w-2xl text-[var(--fg-muted)]">
+        {home.howItFitsDescription}
+      </p>
+
+      <ol class="mt-10 grid gap-8 sm:grid-cols-2 sm:gap-x-10 sm:gap-y-12">
+        <li>
+          <p class="font-mono text-xs tracking-wide text-[var(--accent)]">01</p>
+          <h3 class="mt-2 text-lg font-semibold text-[var(--fg)]">
+            {home.encrypt}
+          </h3>
+          <p class="mt-2 text-sm text-[var(--fg-muted)]">
+            {home.encryptionBefore}
+            <a
+              href="https://github.com/FiloSottile/age"
+              class="text-[var(--accent)] underline underline-offset-2 hover:decoration-[var(--accent)]"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              age
+            </a>
+            {home.encryptionAfter}
+          </p>
+        </li>
+        <li>
+          <p class="font-mono text-xs tracking-wide text-[var(--accent)]">02</p>
+          <h3 class="mt-2 text-lg font-semibold text-[var(--fg)]">
+            {home.commit}
+          </h3>
+          <p class="mt-2 text-sm text-[var(--fg-muted)]">
+            {home.commitBefore}<code class="font-mono">git vault save</code>{home.commitAfter}
+          </p>
+        </li>
+        <li>
+          <p class="font-mono text-xs tracking-wide text-[var(--accent)]">03</p>
+          <h3 class="mt-2 text-lg font-semibold text-[var(--fg)]">
+            {home.restore}
+          </h3>
+          <p class="mt-2 text-sm text-[var(--fg-muted)]">
+            {home.restoreDescription}
+          </p>
+        </li>
+        <li>
+          <p class="font-mono text-xs tracking-wide text-[var(--accent)]">04</p>
+          <h3 class="mt-2 text-lg font-semibold text-[var(--fg)]">
+            {home.profiles}
+          </h3>
+          <p class="mt-2 text-sm text-[var(--fg-muted)]">
+            {home.profilesDescription}
+          </p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--border)]">
+    <div class="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
+      <h2 class="text-2xl font-bold tracking-tight text-[var(--fg)] sm:text-3xl">
+        {home.install}
+      </h2>
+      <p class="mt-3 max-w-2xl text-[var(--fg-muted)]">
+        {home.installDescription}
+      </p>
+      <pre class="mt-6 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-4 font-mono text-sm text-[var(--fg)]"><code>brew install kohkimakimoto/tap/git-vault</code></pre>
+      <a
+        href={localizedPath(locale, '/docs/guide/installation')}
+
+        class="mt-4 inline-flex text-sm font-medium text-[var(--accent)] hover:underline"
+      >
+        {home.installationDetails}
+      </a>
+    </div>
+  </section>
+</BaseLayout>

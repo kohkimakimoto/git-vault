@@ -1,0 +1,16 @@
+---
+import { render } from 'astro:content';
+import DocsLayout from '../layouts/DocsLayout.astro';
+import { docIdentity, getDocAlternates, type DocEntry } from '../lib/docs';
+interface Props { doc: DocEntry }
+const { doc } = Astro.props;
+const { locale } = docIdentity(doc);
+const alternates = await getDocAlternates(doc);
+const { Content } = await render(doc);
+---
+
+<DocsLayout title={doc.data.title} description={doc.data.description} currentId={doc.id} locale={locale} alternates={alternates}>
+  <h1>{doc.data.title}</h1>
+  <p class="lead">{doc.data.description}</p>
+  <Content />
+</DocsLayout>

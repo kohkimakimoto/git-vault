@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { Messages } from '../i18n/utils';
 
 type NavLink = {
   href: string;
@@ -7,9 +8,10 @@ type NavLink = {
 
 type Props = {
   links: NavLink[];
+  messages: Messages['common'];
 };
 
-export default function MobileNav({ links }: Props) {
+export default function MobileNav({ links, messages }: Props) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -18,7 +20,7 @@ export default function MobileNav({ links }: Props) {
         type="button"
         className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--fg)]"
         aria-expanded={open}
-        aria-label="Open navigation"
+        aria-label={open ? messages.closeNavigation : messages.openNavigation}
         onClick={() => setOpen((value) => !value)}
       >
         <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -33,7 +35,7 @@ export default function MobileNav({ links }: Props) {
       {open && (
         <nav
           className="absolute right-0 z-40 mt-2 w-48 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] p-2 shadow-lg"
-          aria-label="Mobile"
+          aria-label={messages.mobileNavigation}
         >
           {links.map((link) => (
             <a
