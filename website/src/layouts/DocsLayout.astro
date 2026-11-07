@@ -1,0 +1,44 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import DocsSidebar from '../components/DocsSidebar.astro';
+import { docHref, getOrderedDocs, type DocEntry } from '../lib/docs';
+
+interface Props {
+  title: string;
+  description: string;
+  currentId: string;
+}
+
+const { title, description, currentId } = Astro.props;
+const docs = await getOrderedDocs();
+const currentIndex = docs.findIndex((doc: DocEntry) => doc.id === currentId);
+const prev = currentIndex > 0 ? docs[currentIndex - 1] : null;
+const next = currentIndex >= 0 && currentIndex < docs.length - 1 ? docs[currentIndex + 1] : null;
+---
+
+<BaseLayout title={title} description={description}>
+  <div class="mx-auto grid max-w-6xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-12 lg:py-14">
+    <DocsSidebar currentId={currentId} />
+    <article class="min-w-0">
+      <div class="prose-docs">
+        <slot />
+      </div>
+
+      <nav class="mt-12 flex flex-col gap-3 border-t border-[var(--border)] pt-6 sm:flex-row sm:justify-between" aria-label="Docs pagination">
+        {prev ? (
+          <a href={docHref(prev)} class="btn-secondary text-sm">
+            ← {prev.data.title}
+          </a>
+        ) : (
+          <span></span>
+        )}
+        {next ? (
+          <a href={docHref(next)} class="btn-secondary text-sm sm:ml-auto">
+            {next.data.title} →
+          </a>
+        ) : null}
+      </nav>
+    </article>
+  </div>
+</BaseLayout>
+

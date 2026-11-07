@@ -1,0 +1,10 @@
+---
+import { getOrderedDocs, docHref } from '../../lib/docs';
+
+const docs = await getOrderedDocs();
+const first = docs[0];
+if (!first) {
+  throw new Error('No documentation pages found.');
+}
+return Astro.redirect(docHref(first));
+---
