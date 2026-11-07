@@ -677,10 +677,12 @@ bash tests/cases/03-recipients.sh
 
 `tests/common.sh` contains temporary-repository setup and small assertions. Each scenario creates disposable keys and repositories, isolates personal Git configuration, and cleans up afterward. Requires Bash, Git, age, age-keygen, and Python.
 
-## Author
+## Related projects
 
-Kohki Makimoto <kohki.makimoto@gmail.com>
+- [git-artifact](https://github.com/kohkimakimoto/git-artifact) — Manage development artifacts on a dedicated orphan Git branch, separate from your application code.
 
 ## License
 
 The MIT License (MIT)
+
+Copyright (c) Kohki Makimoto \<kohki.makimoto@gmail.com\>
