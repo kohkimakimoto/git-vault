@@ -1,9 +1,16 @@
 ---
 import ThemeToggle from './ThemeToggle';
 import MobileNav from './MobileNav';
+import LanguagePicker from './LanguagePicker.astro';
+import type { Locale, LanguageAlternate } from '../i18n/config';
+import { getMessages, localizedPath } from '../i18n/utils';
+
+interface Props { locale: Locale; alternates: LanguageAlternate[] }
+const { locale, alternates } = Astro.props;
+const messages = getMessages(locale);
 
 const links = [
-  { href: '/docs/guide/introduction', label: 'Docs' },
+  { href: localizedPath(locale, '/docs/guide/introduction'), label: messages.common.docs },
 
 
   { href: 'https://github.com/kohkimakimoto/git-vault', label: 'GitHub' },
@@ -12,13 +19,13 @@ const links = [
 
 <header class="sticky top-0 z-50 border-b border-[var(--border)] bg-[color-mix(in_oklab,var(--bg)_88%,transparent)] backdrop-blur-md">
   <div class="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-    <a href="/" class="group flex items-center gap-2.5 text-lg font-medium text-[var(--fg)]">
+    <a href={localizedPath(locale)} class="group flex shrink-0 items-center gap-2.5 text-lg font-medium text-[var(--fg)]">
       <img src="/logo.svg" alt="" width="28" height="28" class="h-7 w-7 dark:brightness-125" />
       <span>git-vault</span>
     </a>
 
     <div class="flex items-center gap-2">
-      <nav class="hidden items-center gap-1 md:flex" aria-label="Primary">
+      <nav class="hidden items-center gap-1 md:flex" aria-label={messages.common.primary}>
         {links.map((link) => (
           <a
             href={link.href}
@@ -30,8 +37,9 @@ const links = [
           </a>
         ))}
       </nav>
-      <ThemeToggle client:load />
-      <MobileNav client:load links={links} />
+      <LanguagePicker locale={locale} alternates={alternates} />
+      <ThemeToggle client:load messages={messages.common} />
+      <MobileNav client:load links={links} messages={messages.common} />
     </div>
   </div>
 </header>

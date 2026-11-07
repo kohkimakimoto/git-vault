@@ -2,31 +2,32 @@
 import '../styles/global.css';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
+import { defaultLocale, locales, type Locale, type LanguageAlternate } from '../i18n/config';
+import { getMessages, localizedPath, publicPath } from '../i18n/utils';
 
 interface Props {
   title: string;
   description?: string;
   noindex?: boolean;
+  locale: Locale;
+  alternates?: LanguageAlternate[];
 }
 
 const {
   title,
-  description = 'Store encrypted files in an orphan Git branch, separate from your application code.',
+  locale,
+  description = getMessages(locale).common.description,
   noindex = false,
+  alternates = locales.map((code) => ({ locale: code, href: localizedPath(code, Astro.url.pathname) })),
 } = Astro.props;
 const pageTitle = title === 'git-vault' ? title : `${title} · git-vault`;
 // build.format "file" emits *.html; public URLs drop the extension (and index.html → /).
-let canonicalPath = Astro.url.pathname;
-if (canonicalPath.endsWith('/index.html')) {
-  canonicalPath = canonicalPath.slice(0, -'/index.html'.length) || '/';
-} else if (canonicalPath.endsWith('.html')) {
-  canonicalPath = canonicalPath.slice(0, -'.html'.length);
-}
-const canonicalURL = new URL(canonicalPath, Astro.site);
+const canonicalURL = new URL(publicPath(Astro.url.pathname), Astro.site);
+const defaultAlternate = alternates.find((entry) => entry.locale === defaultLocale);
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={locale}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -34,6 +35,8 @@ const canonicalURL = new URL(canonicalPath, Astro.site);
     <meta name="description" content={description} />
     {noindex && <meta name="robots" content="noindex" />}
     {!noindex && <link rel="canonical" href={canonicalURL} />}
+    {!noindex && alternates.map((entry) => <link rel="alternate" hreflang={entry.locale} href={new URL(entry.href, Astro.site)} />)}
+    {!noindex && defaultAlternate && <link rel="alternate" hreflang="x-default" href={new URL(defaultAlternate.href, Astro.site)} />}
     {!noindex && <meta property="og:url" content={canonicalURL} />}
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
@@ -60,11 +63,11 @@ const canonicalURL = new URL(canonicalPath, Astro.site);
     </script>
   </head>
   <body class="flex min-h-dvh flex-col">
-    <Header />
+    <Header locale={locale} alternates={alternates} />
     <main class="flex-1">
       <slot />
     </main>
-    <Footer />
+    <Footer locale={locale} />
   </body>
 </html>
 

@@ -1,16 +1,20 @@
 ---
 import { docHref, getDocsGroupedBySection } from '../lib/docs';
+import type { Locale } from '../i18n/config';
+import { getMessages } from '../i18n/utils';
 
 interface Props {
   currentId: string;
+  locale: Locale;
 }
 
-const { currentId } = Astro.props;
-const sections = await getDocsGroupedBySection();
+const { currentId, locale } = Astro.props;
+const sections = await getDocsGroupedBySection(locale);
+const messages = getMessages(locale);
 ---
 
 <aside class="min-w-0 lg:sticky lg:top-20 lg:self-start">
-  <nav aria-label="Docs" class="flex flex-col gap-6">
+  <nav aria-label={messages.common.docs} class="flex flex-col gap-6">
     {
       sections.map((section) => (
         <div>

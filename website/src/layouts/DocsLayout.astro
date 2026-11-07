@@ -2,29 +2,34 @@
 import BaseLayout from './BaseLayout.astro';
 import DocsSidebar from '../components/DocsSidebar.astro';
 import { docHref, getOrderedDocs, type DocEntry } from '../lib/docs';
+import type { Locale, LanguageAlternate } from '../i18n/config';
+import { getMessages } from '../i18n/utils';
 
 interface Props {
   title: string;
   description: string;
   currentId: string;
+  locale: Locale;
+  alternates: LanguageAlternate[];
 }
 
-const { title, description, currentId } = Astro.props;
-const docs = await getOrderedDocs();
+const { title, description, currentId, locale, alternates } = Astro.props;
+const docs = await getOrderedDocs(locale);
+const messages = getMessages(locale);
 const currentIndex = docs.findIndex((doc: DocEntry) => doc.id === currentId);
 const prev = currentIndex > 0 ? docs[currentIndex - 1] : null;
 const next = currentIndex >= 0 && currentIndex < docs.length - 1 ? docs[currentIndex + 1] : null;
 ---
 
-<BaseLayout title={title} description={description}>
+<BaseLayout title={title} description={description} locale={locale} alternates={alternates}>
   <div class="mx-auto grid max-w-6xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-12 lg:py-14">
-    <DocsSidebar currentId={currentId} />
+    <DocsSidebar currentId={currentId} locale={locale} />
     <article class="min-w-0">
       <div class="prose-docs">
         <slot />
       </div>
 
-      <nav class="mt-12 flex flex-col gap-3 border-t border-[var(--border)] pt-6 sm:flex-row sm:justify-between" aria-label="Docs pagination">
+      <nav class="mt-12 flex flex-col gap-3 border-t border-[var(--border)] pt-6 sm:flex-row sm:justify-between" aria-label={messages.docs.pagination}>
         {prev ? (
           <a href={docHref(prev)} class="btn-secondary text-sm">
             ← {prev.data.title}

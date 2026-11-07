@@ -1,7 +1,8 @@
 ---
 import { getOrderedDocs, docHref } from '../../lib/docs';
+import { defaultLocale } from '../../i18n/config';
 
-const docs = await getOrderedDocs();
+const docs = await getOrderedDocs(defaultLocale);
 const first = docs[0];
 if (!first) {
   throw new Error('No documentation pages found.');

@@ -31,9 +31,9 @@ jobs:
         working-directory: website
         run: npm ci
 
-      - name: Build
+      - name: Verify and build
         working-directory: website
-        run: npm run build
+        run: npm test
 
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v4

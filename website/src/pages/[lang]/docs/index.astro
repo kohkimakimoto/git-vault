@@ -1,0 +1,11 @@
+---
+import { translatedLocales } from '../../../i18n/config';
+import { docHref, getOrderedDocs } from '../../../lib/docs';
+export function getStaticPaths() {
+  return translatedLocales.map((locale) => ({ params: { lang: locale }, props: { locale } }));
+}
+const { locale } = Astro.props;
+const [first] = await getOrderedDocs(locale);
+if (!first) throw new Error(`No documentation pages found for ${locale}.`);
+return Astro.redirect(docHref(first));
+---

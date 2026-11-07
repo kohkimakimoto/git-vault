@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { Messages } from '../i18n/utils';
 
 type Theme = 'light' | 'dark';
 
@@ -14,7 +15,7 @@ function applyTheme(theme: Theme) {
   localStorage.setItem('theme', theme);
 }
 
-export default function ThemeToggle() {
+export default function ThemeToggle({ messages }: { messages: Messages['common'] }) {
   const [theme, setTheme] = useState<Theme>('light');
   const [ready, setReady] = useState(false);
 
@@ -36,8 +37,8 @@ export default function ThemeToggle() {
       type="button"
       onClick={toggle}
       className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--fg)] transition hover:border-[var(--navy)]"
-      aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-      title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+      aria-label={theme === 'dark' ? messages.switchToLight : messages.switchToDark}
+      title={theme === 'dark' ? messages.lightMode : messages.darkMode}
     >
       {ready && theme === 'dark' ? (
         <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">

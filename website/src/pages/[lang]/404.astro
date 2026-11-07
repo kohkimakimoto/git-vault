@@ -1,0 +1,9 @@
+---
+import NotFoundPage from '../../components/NotFoundPage.astro';
+import { translatedLocales } from '../../i18n/config';
+export function getStaticPaths() {
+  return translatedLocales.map((locale) => ({ params: { lang: locale }, props: { locale } }));
+}
+const { locale } = Astro.props;
+---
+<NotFoundPage locale={locale} />

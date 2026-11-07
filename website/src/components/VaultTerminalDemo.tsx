@@ -1,7 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import {
   CALLOUT_HOLD_MS,
-  DEMO_STATIC_CALLOUT,
   DEMO_STATIC_LINES,
   DEMO_STATIC_TREE,
   DEMO_STATIC_VAULT,
@@ -11,13 +10,15 @@ import {
   TYPE_MS,
   VAULT_ANIM_MS,
   promptLabel,
-  vaultDemoScenario,
+  createVaultDemoScenario,
+  type DemoMessages,
   type DemoStep,
   type TerminalLine,
   type TreeEnvState,
   type VaultVisualState,
 } from '../data/vault-demo-scenario';
 
+export type { DemoMessages } from '../data/vault-demo-scenario';
 
 type Signal = { cancelled: boolean; paused: boolean };
 type ProgressReporter = ((progress: number) => void) | null;
@@ -37,7 +38,7 @@ function stepDuration(step: DemoStep): number {
   }
 }
 
-function DemoProgress({ reporter }: { reporter: RefObject<ProgressReporter> }) {
+function DemoProgress({ reporter, label }: { reporter: RefObject<ProgressReporter>; label: string }) {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
@@ -45,7 +46,7 @@ function DemoProgress({ reporter }: { reporter: RefObject<ProgressReporter> }) {
     return () => { reporter.current = null; };
   }, [reporter]);
 
-  return <progress className="demo-progress mt-3" aria-label="Demo cycle progress" max={100} value={progress} />;
+  return <progress className="demo-progress mt-3" aria-label={label} max={100} value={progress} />;
 }
 
 function prefersReducedMotion(): boolean {
@@ -96,14 +97,14 @@ function CipherChip({ label = '.env', encrypted = true }: { label?: string; encr
   );
 }
 
-function FileTree({ env, project, envRef }: { env: TreeEnvState; project: string; envRef: RefObject<HTMLSpanElement | null> }) {
+function FileTree({ env, project, envRef, messages }: { env: TreeEnvState; project: string; envRef: RefObject<HTMLSpanElement | null>; messages: DemoMessages }) {
   const showEnv = env !== 'absent';
   const highlight = env === 'restored';
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="border-b border-[var(--border)] px-3 py-2 font-mono text-[10px] tracking-wide text-[var(--fg-muted)] uppercase">
-        Working tree
+        {messages.workingTree}
       </div>
       <div className="flex-1 overflow-auto px-2 py-2 font-mono text-[12px] leading-6 sm:text-[13px]">
         <p className="flex items-center gap-1.5 px-1 font-medium text-[var(--fg)]">
@@ -123,13 +124,13 @@ function FileTree({ env, project, envRef }: { env: TreeEnvState; project: string
             >
               <span className="flex items-center gap-1.5">
                 <span ref={envRef}>.env</span>
-                {highlight && <span className="ml-auto text-[10px] tracking-wide uppercase">new</span>}
+                {highlight && <span className="ml-auto text-[10px] tracking-wide uppercase">{messages.new}</span>}
               </span>
             </li>
           ) : (
             <li className="flex items-center gap-1.5 px-1 text-[var(--fg-muted)] opacity-35">
               <span ref={envRef} className="line-through">.env</span>
-              <span className="ml-auto text-[10px] tracking-wide uppercase">missing</span>
+              <span className="ml-auto text-[10px] tracking-wide uppercase">{messages.missing}</span>
             </li>
           )}
           <li className="px-1 text-[var(--fg-muted)]">main.go</li>
@@ -201,10 +202,11 @@ function VaultTransfer({
   );
 }
 
-function VaultDiagram({ vault, localRef, remoteRef }: {
+function VaultDiagram({ vault, localRef, remoteRef, messages }: {
   vault: VaultVisualState;
   localRef: RefObject<HTMLDivElement | null>;
   remoteRef: RefObject<HTMLDivElement | null>;
+  messages: DemoMessages;
 }) {
   const showLocalChip = vault.local || vault.fetched;
   const showRemoteChip = vault.remote;
@@ -215,7 +217,7 @@ function VaultDiagram({ vault, localRef, remoteRef }: {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="border-b border-[var(--border)] px-3 py-2 font-mono text-[10px] tracking-wide text-[var(--fg-muted)] uppercase">
-        Vault branch
+        {messages.vaultBranch}
       </div>
       <div className="relative flex flex-1 items-center justify-center gap-2 overflow-hidden px-3 py-4 sm:gap-3 sm:px-4">
         <div
@@ -226,7 +228,7 @@ function VaultDiagram({ vault, localRef, remoteRef }: {
               : 'border-[var(--border)] bg-[color-mix(in_oklab,var(--bg)_40%,transparent)]',
           ].join(' ')}
         >
-          <p className="font-mono text-[10px] tracking-wide text-[var(--fg-muted)] uppercase">local</p>
+          <p className="font-mono text-[10px] tracking-wide text-[var(--fg-muted)] uppercase">{messages.local}</p>
           <p className="font-mono text-[11px] font-medium text-[var(--fg)]">
             {vault.local || (!vault.fetched && !fetching) ? 'vault' : 'origin/vault'}
           </p>
@@ -234,7 +236,7 @@ function VaultDiagram({ vault, localRef, remoteRef }: {
             <div ref={localRef} className="flex h-7 w-16 items-center justify-center">
               {showLocalChip && <CipherChip />}
               {!showLocalChip && !encrypting && !fetching && (
-                <span className="font-mono text-[10px] text-[var(--fg-muted)] opacity-50">empty</span>
+                <span className="font-mono text-[10px] text-[var(--fg-muted)] opacity-50">{messages.empty}</span>
               )}
             </div>
           </div>
@@ -255,13 +257,13 @@ function VaultDiagram({ vault, localRef, remoteRef }: {
               : 'border-[var(--border)] bg-[color-mix(in_oklab,var(--bg)_40%,transparent)]',
           ].join(' ')}
         >
-          <p className="font-mono text-[10px] tracking-wide text-[var(--fg-muted)] uppercase">remote</p>
+          <p className="font-mono text-[10px] tracking-wide text-[var(--fg-muted)] uppercase">{messages.remote}</p>
           <p className="font-mono text-[11px] font-medium text-[var(--fg)]">origin/vault</p>
           <div className="mt-auto flex min-h-[36px] items-end justify-center pb-1">
             <div ref={remoteRef} className="flex h-7 w-16 items-center justify-center">
               {showRemoteChip && <CipherChip />}
               {!showRemoteChip && !pushing && (
-                <span className="font-mono text-[10px] text-[var(--fg-muted)] opacity-50">empty</span>
+                <span className="font-mono text-[10px] text-[var(--fg-muted)] opacity-50">{messages.empty}</span>
               )}
             </div>
           </div>
@@ -272,10 +274,11 @@ function VaultDiagram({ vault, localRef, remoteRef }: {
   );
 }
 
-export default function VaultTerminalDemo() {
+export default function VaultTerminalDemo({ messages }: { messages: DemoMessages }) {
+  const scenario = useMemo(() => createVaultDemoScenario(messages), [messages]);
   const [lines, setLines] = useState<TerminalLine[]>(DEMO_STATIC_LINES);
   const [typing, setTyping] = useState<{ prompt: string; text: string } | null>(null);
-  const [callout, setCallout] = useState<string | null>(DEMO_STATIC_CALLOUT);
+  const [callout, setCallout] = useState<string | null>(messages.restoreCallout);
   const [host, setHost] = useState('dev@ci');
 
   const [sceneCaption, setSceneCaption] = useState<string | null>(null);
@@ -315,14 +318,14 @@ export default function VaultTerminalDemo() {
   }
 
   useEffect(() => {
-    const signal = signalRef.current;
-    signal.cancelled = false;
-    signal.paused = false;
+    const signal: Signal = { cancelled: false, paused: false };
+    signalRef.current = signal;
+    setPaused(false);
 
     if (prefersReducedMotion()) {
       setReduced(true);
       setLines(DEMO_STATIC_LINES);
-      setCallout(DEMO_STATIC_CALLOUT);
+      setCallout(messages.restoreCallout);
       setTreeEnv(DEMO_STATIC_TREE);
       setVault(DEMO_STATIC_VAULT);
       vaultRef.current = DEMO_STATIC_VAULT;
@@ -336,7 +339,7 @@ export default function VaultTerminalDemo() {
     async function play() {
       let currentHost = 'dev@laptop';
       let loopIndex = 0;
-      const scenarioDuration = vaultDemoScenario.reduce((total, step) => total + stepDuration(step), 0);
+      const scenarioDuration = scenario.reduce((total, step) => total + stepDuration(step), 0);
 
       while (!signal.cancelled) {
         const cycleDuration = scenarioDuration + SCENE_FADE_MS + (loopIndex > 0 ? SCENE_FADE_MS : 0);
@@ -371,7 +374,7 @@ export default function VaultTerminalDemo() {
         }
         loopIndex += 1;
 
-        for (const step of vaultDemoScenario) {
+        for (const step of scenario) {
           if (signal.cancelled) return;
 
           switch (step.kind) {
@@ -484,7 +487,7 @@ export default function VaultTerminalDemo() {
     return () => {
       signal.cancelled = true;
     };
-  }, []);
+  }, [scenario, messages.restoreCallout]);
 
   function togglePaused() {
     if (reduced) return;
@@ -496,10 +499,10 @@ export default function VaultTerminalDemo() {
   return (
     <section
       className="relative w-full"
-      aria-label="git-vault workflow demo"
+      aria-label={messages.workflowLabel}
     >
       <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-[var(--fg-muted)]">Workflow demo</p>
+        <p className="text-sm font-medium text-[var(--fg-muted)]">{messages.workflowTitle}</p>
         {!reduced && (
           <button
             type="button"
@@ -510,7 +513,7 @@ export default function VaultTerminalDemo() {
             <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
               {paused ? <path d="M4 2l10 6-10 6z" /> : <path d="M3 2h4v12H3zM10 2h4v12h-4z" />}
             </svg>
-            {paused ? 'Resume demo' : 'Pause demo'}
+            {paused ? messages.resume : messages.pause}
           </button>
         )}
       </div>
@@ -591,10 +594,10 @@ export default function VaultTerminalDemo() {
 
         <div ref={transferSurfaceRef} className="relative grid grid-cols-1 bg-[color-mix(in_oklab,var(--bg)_45%,var(--bg-elevated))] sm:grid-cols-[2fr_3fr]">
           <div className="min-h-[180px] border-[var(--border)] sm:border-r">
-            <FileTree env={treeEnv} project="app" envRef={treeEnvRef} />
+            <FileTree env={treeEnv} project="app" envRef={treeEnvRef} messages={messages} />
           </div>
           <div className="min-h-[180px]">
-            <VaultDiagram vault={vault} localRef={localChipRef} remoteRef={remoteChipRef} />
+            <VaultDiagram vault={vault} localRef={localChipRef} remoteRef={remoteChipRef} messages={messages} />
           </div>
           {vault.anim && (
             <VaultTransfer
@@ -607,7 +610,7 @@ export default function VaultTerminalDemo() {
           )}
         </div>
       </div>
-      {!reduced && <DemoProgress reporter={progressReporterRef} />}
+      {!reduced && <DemoProgress reporter={progressReporterRef} label={messages.progress} />}
     </section>
   );
 }
