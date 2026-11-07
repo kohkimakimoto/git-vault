@@ -9,7 +9,7 @@ const { currentId } = Astro.props;
 const sections = await getDocsGroupedBySection();
 ---
 
-<aside class="lg:sticky lg:top-20 lg:self-start">
+<aside class="min-w-0 lg:sticky lg:top-20 lg:self-start">
   <nav aria-label="Docs" class="flex flex-col gap-6">
     {
       sections.map((section) => (
