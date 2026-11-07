@@ -6,11 +6,13 @@ import Footer from '../components/Footer.astro';
 interface Props {
   title: string;
   description?: string;
+  noindex?: boolean;
 }
 
 const {
   title,
   description = 'Store encrypted files in an orphan Git branch, separate from your application code.',
+  noindex = false,
 } = Astro.props;
 const pageTitle = title === 'git-vault' ? title : `${title} · git-vault`;
 // build.format "file" emits *.html; public URLs drop the extension (and index.html → /).
@@ -30,10 +32,11 @@ const canonicalURL = new URL(canonicalPath, Astro.site);
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
     <meta name="description" content={description} />
-    <link rel="canonical" href={canonicalURL} />
+    {noindex && <meta name="robots" content="noindex" />}
+    {!noindex && <link rel="canonical" href={canonicalURL} />}
+    {!noindex && <meta property="og:url" content={canonicalURL} />}
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
-    <meta property="og:url" content={canonicalURL} />
     <meta property="og:type" content="website" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" href="/favicon.ico" />
