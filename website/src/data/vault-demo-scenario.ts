@@ -44,9 +44,11 @@ export const VAULT_ANIM_MS = 1400;
 /** Static snapshot used for SSR and prefers-reduced-motion. */
 export const DEMO_STATIC_LINES: TerminalLine[] = [
   { id: 's1', kind: 'command', prompt: 'dev@ci ~/app %', text: 'git fetch origin vault' },
-  { id: 's2', kind: 'output', text: 'From origin  * [new branch] vault' },
-  { id: 's3', kind: 'command', prompt: 'dev@ci ~/app %', text: 'git vault restore .env' },
-  { id: 's4', kind: 'output', text: 'Restored: .env' },
+  { id: 's2', kind: 'output', text: 'From origin  * [new branch] vault → origin/vault' },
+  { id: 's3', kind: 'command', prompt: 'dev@ci ~/app %', text: 'git branch --track vault origin/vault' },
+  { id: 's4', kind: 'output', text: "branch 'vault' set up to track 'origin/vault'." },
+  { id: 's5', kind: 'command', prompt: 'dev@ci ~/app %', text: 'git vault restore .env' },
+  { id: 's6', kind: 'output', text: 'Restored: .env' },
 ];
 
 export const DEMO_STATIC_CALLOUT = 'Restore the encrypted .env';
@@ -83,6 +85,11 @@ export const vaultDemoScenario: DemoStep[] = [
   { kind: 'type', text: 'git fetch origin vault' },
   { kind: 'output', lines: ['From github.com:example/app', ' * [new branch]      vault → origin/vault'] },
   { kind: 'vault', anim: 'fetch' },
+  { kind: 'vault', anim: null },
+  { kind: 'callout', text: 'Create a local vault branch tracking origin/vault' },
+  { kind: 'prompt', cwd: '~/app' },
+  { kind: 'type', text: 'git branch --track vault origin/vault' },
+  { kind: 'output', lines: ["branch 'vault' set up to track 'origin/vault'."] },
   { kind: 'vault', local: true, anim: null },
   { kind: 'pause', ms: 700 },
   { kind: 'callout', text: 'Restore the encrypted .env' },

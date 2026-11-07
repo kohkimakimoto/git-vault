@@ -2,7 +2,7 @@
 title: Working branches
 description: Update the vault via a side branch and pull request.
 section: guide
-order: 7
+order: 8
 ---
 
 `-b` names the local vault branch to operate on. `init` creates that branch and rejects an existing name. Other commands require an existing branch, unless you pass `-n` (where supported) to create one.
