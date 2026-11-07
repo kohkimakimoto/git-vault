@@ -9,6 +9,7 @@ export type DemoStep =
       kind: 'vault';
       local?: boolean;
       remote?: boolean;
+      fetched?: boolean;
       anim?: 'encrypt' | 'push' | 'fetch' | 'decrypt' | null;
     }
   | { kind: 'clear' }
@@ -28,6 +29,7 @@ export type VaultAnim = 'encrypt' | 'push' | 'fetch' | 'decrypt' | null;
 export type VaultVisualState = {
   local: boolean;
   remote: boolean;
+  fetched: boolean;
   anim: VaultAnim;
 };
 
@@ -56,6 +58,7 @@ export const DEMO_STATIC_TREE: TreeEnvState = 'restored';
 export const DEMO_STATIC_VAULT: VaultVisualState = {
   local: true,
   remote: true,
+  fetched: false,
   anim: null,
 };
 
@@ -85,7 +88,7 @@ export const vaultDemoScenario: DemoStep[] = [
   { kind: 'type', text: 'git fetch origin vault' },
   { kind: 'output', lines: ['From github.com:example/app', ' * [new branch]      vault → origin/vault'] },
   { kind: 'vault', anim: 'fetch' },
-  { kind: 'vault', anim: null },
+  { kind: 'vault', fetched: true, anim: null },
   { kind: 'callout', text: 'Create a local vault branch tracking origin/vault' },
   { kind: 'prompt', cwd: '~/app' },
   { kind: 'type', text: 'git branch --track vault origin/vault' },

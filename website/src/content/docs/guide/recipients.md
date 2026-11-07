@@ -32,3 +32,7 @@ git vault init -R teammates.txt
 Provide recipients with `-r KEY` or `-R PATH` (not both). `-R` may list several keys, one per line. Optional `-l` / `--label` attaches a non-unique description when adding via `init`, `profile add`, or `recipient add`.
 
 When the profile has saved files, `recipient add` and `recipient remove` decrypt every ciphertext with a [private identity](/docs/guide/private-keys), re-encrypt for the updated public keys, and commit the list and ciphertexts together. The last public key cannot be removed. If any step fails, the branch is left unchanged.
+
+## Removing access
+
+`recipient remove` re-encrypts only the current snapshot at the branch tip; it does not rewrite older commits. A removed recipient can still decrypt older ciphertext with their private key. If previously shared secret values must stop working, rotate those values in the application or service and `save` the new values for the remaining recipients.

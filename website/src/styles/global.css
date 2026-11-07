@@ -14,7 +14,7 @@
   --color-navy: #33465e;
   --color-coral: #f05a3c;
   --color-coral-soft: #fff0ec;
-  --color-accent: #f05a3c;
+  --color-accent: #ba3d26;
 }
 
 @layer base {
@@ -25,7 +25,9 @@
     --fg: var(--color-ink);
     --fg-muted: var(--color-ink-muted);
     --border: var(--color-line);
-    --accent: var(--color-coral);
+    --accent: var(--color-accent);
+    --accent-decoration: var(--color-coral);
+    --accent-foreground: #ffffff;
     --accent-soft: var(--color-coral-soft);
     --navy: var(--color-navy);
     --hero-glow-a: rgb(51 70 94 / 0.12);
@@ -40,6 +42,8 @@
     --fg-muted: #9aa6b8;
     --border: #2a3548;
     --accent: #ff7a5c;
+    --accent-decoration: #ff7a5c;
+    --accent-foreground: #0f141c;
     --accent-soft: #2a1713;
     --navy: #9eb0c7;
     --hero-glow-a: rgb(158 176 199 / 0.12);
@@ -149,7 +153,7 @@
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-md bg-[var(--accent)] px-5 py-2.5 font-medium text-white transition;
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-[var(--accent)] px-5 py-2.5 font-medium text-[var(--accent-foreground)] transition;
     @apply hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)];
   }
 
@@ -223,95 +227,17 @@
   }
 }
 
-@keyframes vault-encrypt {
-  0% {
-    opacity: 0;
-    transform: translate(-70%, -40%) scale(0.7);
+@keyframes vault-transfer {
+  from {
+    transform: translate(0, 0);
   }
-  55% {
-    opacity: 1;
-    transform: translate(-10%, 0) scale(1.05);
-  }
-  100% {
-    opacity: 1;
-    transform: translate(0, 0) scale(1);
+  to {
+    transform: translate(var(--vault-transfer-x), var(--vault-transfer-y));
   }
 }
 
-@keyframes vault-push {
-  0% {
-    opacity: 0;
-    left: 28%;
-  }
-  15% {
-    opacity: 1;
-  }
-  85% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    left: 68%;
-  }
-}
-
-@keyframes vault-fetch {
-  0% {
-    opacity: 0;
-    left: 68%;
-  }
-  15% {
-    opacity: 1;
-  }
-  85% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    left: 28%;
-  }
-}
-
-@keyframes vault-decrypt {
-  0% {
-    opacity: 1;
-    transform: translate(0, 0) scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-80%, -50%) scale(0.75);
-  }
-}
-
-@keyframes vault-pop {
-  0% {
-    opacity: 0;
-    transform: scale(0.85);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.vault-anim-encrypt {
-  animation: vault-encrypt 1.2s ease-out both;
-}
-
-.vault-anim-push {
-  animation: vault-push 1.3s ease-in-out both;
-}
-
-.vault-anim-fetch {
-  animation: vault-fetch 1.3s ease-in-out both;
-}
-
-.vault-anim-decrypt {
-  animation: vault-decrypt 1s ease-in both;
-}
-
-.vault-anim-pop {
-  animation: vault-pop 0.45s ease-out both;
+.vault-anim-transfer {
+  animation: vault-transfer 1.3s ease-in-out both;
 }
 
 @keyframes callout-fade-in {
@@ -353,17 +279,17 @@
   animation: soft-pulse 3.2s ease-in-out infinite;
 }
 
+.demo-paused * {
+  animation-play-state: paused !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-rise,
   .animate-rise-delay-1,
   .animate-rise-delay-2,
   .animate-draw,
   .animate-soft-pulse,
-  .vault-anim-encrypt,
-  .vault-anim-push,
-  .vault-anim-fetch,
-  .vault-anim-decrypt,
-  .vault-anim-pop,
+  .vault-anim-transfer,
   .callout-fade-in {
     animation: none;
   }

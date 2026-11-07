@@ -21,8 +21,9 @@ import VaultTerminalDemo from "../components/VaultTerminalDemo";
           Secrets on a separate Git branch
         </h1>
         <p class="animate-rise-delay-2 mt-5 max-w-2xl text-base text-[var(--fg-muted)] sm:text-lg">
-          Encrypt secret files, keep them in an orphan vault branch, and leave
-          your application history clean.
+          For smaller projects, keep encrypted secrets alongside your code using
+          familiar Git commands. An orphan vault branch keeps your application
+          history clean.
         </p>
         <div class="animate-rise-delay-2 mt-7 flex flex-wrap gap-3">
           <a href="/docs/guide/quick-start" class="btn-primary">
@@ -39,7 +40,7 @@ import VaultTerminalDemo from "../components/VaultTerminalDemo";
         <VaultTerminalDemo client:visible />
         <p class="mt-4 text-sm text-[var(--fg-muted)]">
           Demo assumes an initialized vault. Each machine has a configured
-          identity with its public key registered as a recipient.
+          identity with its public key registered as a recipient.{' '}
           <a href="/docs/guide/clone-and-sync" class="text-[var(--accent)] underline underline-offset-3">Set up another clone →</a>
         </p>
       </div>
