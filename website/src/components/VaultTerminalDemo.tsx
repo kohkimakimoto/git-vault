@@ -12,6 +12,7 @@ import {
   VAULT_ANIM_MS,
   promptLabel,
   vaultDemoScenario,
+  type DemoStep,
   type TerminalLine,
   type TreeEnvState,
   type VaultVisualState,
@@ -19,13 +20,40 @@ import {
 
 
 type Signal = { cancelled: boolean; paused: boolean };
+type ProgressReporter = ((progress: number) => void) | null;
+
+const COMMAND_HOLD_MS = 220;
+const CALLOUT_GAP_MS = 80;
+
+function stepDuration(step: DemoStep): number {
+  switch (step.kind) {
+    case 'scene': return SCENE_FADE_MS * 2 + SCENE_HOLD_MS;
+    case 'type': return [...step.text].length * TYPE_MS + COMMAND_HOLD_MS;
+    case 'output': return step.lines.length * LINE_MS;
+    case 'callout': return CALLOUT_GAP_MS + CALLOUT_HOLD_MS;
+    case 'vault': return step.anim ? VAULT_ANIM_MS : 0;
+    case 'pause': return step.ms ?? 600;
+    default: return 0;
+  }
+}
+
+function DemoProgress({ reporter }: { reporter: RefObject<ProgressReporter> }) {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    reporter.current = setProgress;
+    return () => { reporter.current = null; };
+  }, [reporter]);
+
+  return <progress className="demo-progress mt-3" aria-label="Demo cycle progress" max={100} value={progress} />;
+}
 
 function prefersReducedMotion(): boolean {
   if (typeof window === 'undefined') return false;
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-function sleep(ms: number, signal: Signal) {
+function sleep(ms: number, signal: Signal, onProgress?: (elapsed: number) => void) {
   return new Promise<void>((resolve) => {
     let elapsed = 0;
     let last = performance.now();
@@ -37,6 +65,7 @@ function sleep(ms: number, signal: Signal) {
       const now = performance.now();
       if (!signal.paused) {
         elapsed += now - last;
+        onProgress?.(Math.min(elapsed, ms));
       }
       last = now;
       if (elapsed >= ms) {
@@ -259,6 +288,7 @@ export default function VaultTerminalDemo() {
 
 
   const signalRef = useRef<Signal>({ cancelled: false, paused: false });
+  const progressReporterRef = useRef<ProgressReporter>(null);
   const lineIdRef = useRef(0);
   const bodyRef = useRef<HTMLDivElement>(null);
   const transferSurfaceRef = useRef<HTMLDivElement>(null);
@@ -306,8 +336,20 @@ export default function VaultTerminalDemo() {
     async function play() {
       let currentHost = 'dev@laptop';
       let loopIndex = 0;
+      const scenarioDuration = vaultDemoScenario.reduce((total, step) => total + stepDuration(step), 0);
 
       while (!signal.cancelled) {
+        const cycleDuration = scenarioDuration + SCENE_FADE_MS + (loopIndex > 0 ? SCENE_FADE_MS : 0);
+        let completedMs = 0;
+        progressReporterRef.current?.(0);
+
+        async function wait(ms: number) {
+          await sleep(ms, signal, (elapsed) => {
+            progressReporterRef.current?.(Math.min(100, (completedMs + elapsed) / cycleDuration * 100));
+          });
+          completedMs += ms;
+        }
+
         currentHost = 'dev@laptop';
         setHost(currentHost);
         promptRef.current = promptLabel(currentHost);
@@ -322,7 +364,7 @@ export default function VaultTerminalDemo() {
 
         if (loopIndex > 0) {
           setUiVisible(true);
-          await sleep(SCENE_FADE_MS, signal);
+          await wait(SCENE_FADE_MS);
           if (signal.cancelled) return;
         } else {
           setUiVisible(true);
@@ -336,7 +378,7 @@ export default function VaultTerminalDemo() {
             case 'scene': {
               setCallout(null);
               setUiVisible(false);
-              await sleep(SCENE_FADE_MS, signal);
+              await wait(SCENE_FADE_MS);
               if (signal.cancelled) return;
 
               currentHost = step.host;
@@ -350,7 +392,7 @@ export default function VaultTerminalDemo() {
               setSceneCaption(step.label);
 
               setUiVisible(true);
-              await sleep(SCENE_FADE_MS + SCENE_HOLD_MS, signal);
+              await wait(SCENE_FADE_MS + SCENE_HOLD_MS);
               if (signal.cancelled) return;
               setSceneCaption(null);
               break;
@@ -372,16 +414,16 @@ export default function VaultTerminalDemo() {
               if (step.anim !== undefined) patch.anim = step.anim;
               patchVault(patch);
               if (step.anim) {
-                await sleep(VAULT_ANIM_MS, signal);
+                await wait(VAULT_ANIM_MS);
               }
               break;
             }
             case 'callout': {
               setCallout(null);
-              await sleep(80, signal);
+              await wait(CALLOUT_GAP_MS);
               if (signal.cancelled) return;
               setCallout(step.text);
-              await sleep(CALLOUT_HOLD_MS, signal);
+              await wait(CALLOUT_HOLD_MS);
               break;
             }
 
@@ -399,14 +441,14 @@ export default function VaultTerminalDemo() {
                 if (signal.cancelled) return;
                 typed += ch;
                 setTyping({ prompt, text: typed });
-                await sleep(TYPE_MS, signal);
+                await wait(TYPE_MS);
               }
               setTyping(null);
               setLines((prev) => [
                 ...prev,
                 { id: nextId('c'), kind: 'command', prompt, text: typed },
               ]);
-              await sleep(220, signal);
+              await wait(COMMAND_HOLD_MS);
               break;
             }
             case 'output': {
@@ -414,12 +456,12 @@ export default function VaultTerminalDemo() {
                 if (signal.cancelled) return;
                 setLines((prev) => [...prev, { id: nextId('o'), kind: 'output', text: line }]);
                 scrollToBottom();
-                await sleep(LINE_MS, signal);
+                await wait(LINE_MS);
               }
               break;
             }
             case 'pause': {
-              await sleep(step.ms ?? 600, signal);
+              await wait(step.ms ?? 600);
               break;
             }
           }
@@ -431,7 +473,7 @@ export default function VaultTerminalDemo() {
         setCallout(null);
         setSceneCaption(null);
         setUiVisible(false);
-        await sleep(SCENE_FADE_MS, signal);
+        await wait(SCENE_FADE_MS);
 
       }
     }
@@ -565,6 +607,7 @@ export default function VaultTerminalDemo() {
           )}
         </div>
       </div>
+      {!reduced && <DemoProgress reporter={progressReporterRef} />}
     </section>
   );
 }

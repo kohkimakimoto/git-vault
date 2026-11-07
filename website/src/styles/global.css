@@ -164,6 +164,26 @@
     @apply hover:border-[var(--navy)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--navy)];
   }
 
+  .demo-progress {
+    @apply block h-1 w-full overflow-hidden rounded-full border-0 bg-[var(--border)];
+    appearance: none;
+  }
+
+  .demo-progress::-webkit-progress-bar {
+    background: var(--border);
+    border-radius: inherit;
+  }
+
+  .demo-progress::-webkit-progress-value {
+    background: var(--accent);
+    border-radius: inherit;
+  }
+
+  .demo-progress::-moz-progress-bar {
+    background: var(--accent);
+    border-radius: inherit;
+  }
+
   /* Top page: grid panels in the upper corners only */
   .home-grid {
     background-image:
