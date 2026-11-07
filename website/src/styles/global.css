@@ -4,7 +4,6 @@
 
 @theme {
   --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Syne", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 
   --color-ink: #1a2332;
@@ -69,7 +68,7 @@
   }
 
   .prose-docs :where(h1, h2, h3, h4) {
-    @apply font-display font-semibold tracking-tight text-[var(--fg)];
+    @apply font-sans font-semibold tracking-tight text-[var(--fg)];
   }
 
   .prose-docs :where(h1) {
