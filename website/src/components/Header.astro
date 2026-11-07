@@ -1,0 +1,37 @@
+---
+import ThemeToggle from './ThemeToggle';
+import MobileNav from './MobileNav';
+
+const links = [
+  { href: '/docs/guide/introduction', label: 'Docs' },
+
+
+  { href: 'https://github.com/kohkimakimoto/git-vault', label: 'GitHub' },
+];
+---
+
+<header class="sticky top-0 z-50 border-b border-[var(--border)] bg-[color-mix(in_oklab,var(--bg)_88%,transparent)] backdrop-blur-md">
+  <div class="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+    <a href="/" class="group flex items-center gap-2.5 text-lg font-medium text-[var(--fg)]">
+      <img src="/logo.svg" alt="" width="28" height="28" class="h-7 w-7 dark:brightness-125" />
+      <span>git-vault</span>
+    </a>
+
+    <div class="flex items-center gap-2">
+      <nav class="hidden items-center gap-1 md:flex" aria-label="Primary">
+        {links.map((link) => (
+          <a
+            href={link.href}
+            class="rounded-md px-3 py-1.5 text-sm text-[var(--fg-muted)] transition hover:bg-[var(--accent-soft)] hover:text-[var(--fg)]"
+            target={link.href.startsWith('http') ? '_blank' : undefined}
+            rel={link.href.startsWith('http') ? 'noopener noreferrer' : undefined}
+          >
+            {link.label}
+          </a>
+        ))}
+      </nav>
+      <ThemeToggle client:load />
+      <MobileNav client:load links={links} />
+    </div>
+  </div>
+</header>

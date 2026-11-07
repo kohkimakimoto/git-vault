@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">git-vault — two roots</title>
+  <desc id="desc">Two disconnected horizontal histories: navy application commits above and an orange vault root leading to a lock below.</desc>
+  <path d="M43 53h106" stroke="#33465E" stroke-width="9" stroke-linecap="round"/>
+  <g fill="#33465E">
+    <circle cx="43" cy="53" r="13"/>
+    <circle cx="96" cy="53" r="13"/>
+    <circle cx="149" cy="53" r="13"/>
+  </g>
+  <path d="M43 134h96" stroke="#F05A3C" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="43" cy="134" r="13" fill="#F05A3C"/>
+  <path d="M126 120v-12a13 13 0 0 1 26 0v12" stroke="#F05A3C" stroke-width="7" stroke-linecap="round"/>
+  <rect x="115" y="116" width="48" height="39" rx="9" fill="#F05A3C"/>
+  <circle cx="139" cy="134" r="5" fill="#FFF"/>
+  <path d="M139 136v7" stroke="#FFF" stroke-width="4" stroke-linecap="round"/>
+</svg>

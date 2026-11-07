@@ -1,0 +1,42 @@
+---
+import { docHref, getDocsGroupedBySection } from '../lib/docs';
+
+interface Props {
+  currentId: string;
+}
+
+const { currentId } = Astro.props;
+const sections = await getDocsGroupedBySection();
+---
+
+<aside class="lg:sticky lg:top-20 lg:self-start">
+  <nav aria-label="Docs" class="flex flex-col gap-6">
+    {
+      sections.map((section) => (
+        <div>
+          <p class="mb-2 text-xs font-semibold tracking-[0.14em] text-[var(--fg-muted)] uppercase">
+            {section.title}
+          </p>
+          <div class="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
+            {section.docs.map((doc) => {
+              const active = doc.id === currentId;
+              return (
+                <a
+                  href={docHref(doc)}
+                  class:list={[
+                    'whitespace-nowrap rounded-md px-3 py-2 text-sm transition',
+                    active
+                      ? 'bg-[var(--accent-soft)] font-medium text-[var(--accent)]'
+                      : 'text-[var(--fg-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--fg)]',
+                  ]}
+                >
+                  {doc.data.title}
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      ))
+    }
+  </nav>
+</aside>
