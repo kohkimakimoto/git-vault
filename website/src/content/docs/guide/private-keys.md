@@ -61,4 +61,4 @@ age-keygen | age -p > .git/vaultkey.age
 chmod 600 .git/vaultkey.age
 ```
 
-Give only the public key (`Public key: age1...`) to the repository administrator so they can register it as a [recipient](/docs/guide/recipients). Do not share the identity file or passphrase.
+Give only the public key (`Public key: age...`) to the repository administrator so they can register it as a [recipient](/docs/guide/recipients). Do not share the identity file or passphrase.

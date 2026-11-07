@@ -196,7 +196,7 @@ This writes into `~/.gitconfig`, for example:
 
 ## Recipients
 
-A recipient is who may use a profile's secrets (a person, bot, or role). Each recipient is an age public key (for example `age1...`). Labels are git-vault metadata; encryption uses the public key.
+A recipient is who may use a profile's secrets (a person, bot, or role). Each recipient is an age public key (for example `age...`). Labels are git-vault metadata; encryption uses the public key.
 
 Each profile stores recipients as JSON at `<profile>/recipients.json`. CLI input uses `-r` / `-R`:
 
@@ -331,7 +331,7 @@ Treat that identity as high privilege: it can decrypt the current snapshot of ev
 
    A passphrase is recommended: if you forget to dispose of the key file, an attacker or another process that finds it still cannot use it without the passphrase, and local automation such as AI agents is less likely to unlock it unintentionally. Evaluate convenience against that trade-off; a plaintext identity is also worth considering.
 
-3. **Give only the public key** (the `Public key: age1...` line from `age-keygen`) to the repository administrator. Do not send the identity file or the passphrase.
+3. **Give only the public key** (the `Public key: age...` line from `age-keygen`) to the repository administrator. Do not send the identity file or the passphrase.
 
 4. **The repository administrator registers that public key** on the profiles the person needs (`recipient add`, or at `init` / `profile add`), using a [master identity](#master-key) when the profile already has files. Register the person only on profiles they should decrypt—narrow when you can; the same public key may be listed on more than one profile when that matches how they work.
 

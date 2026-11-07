@@ -31,7 +31,7 @@ age-keygen | age -p > .git/vaultkey.age
 chmod 600 .git/vaultkey.age
 ```
 
-`age -p` prompts for a passphrase. Replace `age...` below with the full public key (`age1...`) printed by `age-keygen`.
+`age -p` prompts for a passphrase. Replace `age...` below with the full public key printed by `age-keygen`.
 
 ## Initialize and save
 

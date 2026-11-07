@@ -5,7 +5,7 @@ section: guide
 order: 5
 ---
 
-A recipient is who may use a profile's secrets (a person, bot, or role). Each recipient is an [age](https://github.com/FiloSottile/age) public key (for example `age1...`). Labels are git-vault metadata; encryption uses the public key.
+A recipient is who may use a profile's secrets (a person, bot, or role). Each recipient is an [age](https://github.com/FiloSottile/age) public key (for example `age19438ccrwjqpmjhjpvp40aclyjnpllhgru62uak84knzs5n4k3y6q6ej2tq`). Labels are git-vault metadata; encryption uses the public key.
 
 Each profile stores recipients as JSON at `<profile>/recipients.json`. CLI input uses `-r` / `-R`:
 
