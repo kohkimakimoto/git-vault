@@ -573,15 +573,15 @@ export default function VaultTerminalDemo({ messages }: { messages: DemoMessages
               if (line.kind === 'command') {
                 return (
                   <p key={line.id} className="whitespace-pre-wrap text-[var(--fg)]">
-                    {line.prompt ? <span className="text-[var(--navy)]">{line.prompt} </span> : null}
-                    <span>{line.text}</span>
+                    {line.prompt ? <span className="font-bold text-[var(--navy)]">{line.prompt} </span> : null}
+                    <span className="font-normal">{line.text}</span>
                   </p>
                 );
               }
               if (line.kind === 'prompt') {
                 return (
                   <p key={line.id} className="text-[var(--fg)]">
-                    <span className="text-[var(--navy)]">{line.prompt}</span>
+                    <span className="font-bold text-[var(--navy)]">{line.prompt}</span>
                   </p>
                 );
               }
@@ -594,8 +594,8 @@ export default function VaultTerminalDemo({ messages }: { messages: DemoMessages
 
             {typing && (
               <p className="whitespace-pre-wrap text-[var(--fg)]">
-                <span className="text-[var(--navy)]">{typing.prompt} </span>
-                <span>{typing.text}</span>
+                <span className="font-bold text-[var(--navy)]">{typing.prompt} </span>
+                <span className="font-normal">{typing.text}</span>
                 <span className="ml-0.5 inline-block h-[1em] w-[0.45em] bg-[var(--accent)] align-middle animate-pulse" />
               </p>
             )}
