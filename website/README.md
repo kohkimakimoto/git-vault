@@ -17,6 +17,7 @@ English uses the existing URLs (`/`, `/docs/...`). Japanese uses `/ja` and `/ja/
 - `src/i18n/config.ts`: supported locale codes, native display names, and the default locale. Astro's routing configuration and the language picker share this definition.
 - `src/i18n/en.ts` and `ja.ts`: UI translations, including home-page copy and demo annotations. All dictionaries must provide the same keys.
 - `src/content/docs/{locale}/{section}/{slug}.md`: documentation translations. Keep the same section and slug across languages; the collection ID includes the locale, while the public English URL does not.
+- `src/pages/search/[locale].json.ts`: build-time search indexes (`/search/en.json`, `/search/ja.json`). The docs search UI loads only the current locale's index and searches in the browser.
 - `src/pages/[lang]/`: statically generated routes for non-default languages. Page rendering is shared with the English routes.
 
 To add a language:

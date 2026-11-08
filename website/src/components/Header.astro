@@ -1,6 +1,7 @@
 ---
 import ThemeToggle from './ThemeToggle';
 import MobileNav from './MobileNav';
+import DocsSearch from './DocsSearch';
 import LanguagePicker from './LanguagePicker.astro';
 import type { Locale, LanguageAlternate } from '../i18n/config';
 import { getMessages, localizedPath } from '../i18n/utils';
@@ -37,9 +38,33 @@ const links = [
           </a>
         ))}
       </nav>
+      <button
+        type="button"
+        class="inline-flex h-9 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 text-sm text-[var(--fg-muted)] transition hover:border-[var(--navy)] hover:text-[var(--fg)]"
+        aria-label={messages.docs.searchOpen}
+        data-docs-search-open
+      >
+        <svg viewBox="0 0 24 24" class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"></circle>
+          <path d="M20 20l-3.5-3.5"></path>
+        </svg>
+        <span class="hidden sm:inline">{messages.docs.search}</span>
+        <kbd class="pointer-events-none hidden min-w-[2.75rem] justify-center rounded border border-[var(--border)] px-1.5 py-0.5 text-center font-mono text-[10px] text-[var(--fg-muted)] md:inline-flex" data-docs-search-shortcut>⌘K</kbd>
+      </button>
+      <DocsSearch client:load locale={locale} messages={messages.docs} />
       <LanguagePicker locale={locale} alternates={alternates} />
       <ThemeToggle client:load messages={messages.common} />
       <MobileNav client:load links={links} messages={messages.common} />
     </div>
   </div>
 </header>
+<script is:inline>
+  (function () {
+    try {
+      var mac = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
+      document.querySelectorAll('[data-docs-search-shortcut]').forEach(function (el) {
+        el.textContent = mac ? '⌘K' : 'Ctrl K';
+      });
+    } catch (_) {}
+  })();
+</script>
