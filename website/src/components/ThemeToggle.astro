@@ -1,0 +1,51 @@
+---
+import type { Messages } from '../i18n/utils';
+
+interface Props {
+  messages: Messages['common'];
+}
+
+const { messages } = Astro.props;
+---
+
+<button
+  type="button"
+  class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--fg)] transition hover:border-[var(--navy)]"
+  aria-label={messages.switchToDark}
+  title={messages.darkMode}
+  data-theme-toggle
+  data-label-to-light={messages.switchToLight}
+  data-label-to-dark={messages.switchToDark}
+  data-title-light={messages.lightMode}
+  data-title-dark={messages.darkMode}
+>
+  <!-- Visible in dark mode: click switches to light -->
+  <svg viewBox="0 0 24 24" class="hidden h-4 w-4 dark:block" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+    <circle cx="12" cy="12" r="4"></circle>
+    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+  </svg>
+  <!-- Visible in light mode: click switches to dark -->
+  <svg viewBox="0 0 24 24" class="h-4 w-4 dark:hidden" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+    <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5z"></path>
+  </svg>
+</button>
+
+<script>
+  function syncThemeToggle(button: HTMLButtonElement) {
+    const dark = document.documentElement.classList.contains('dark');
+    button.setAttribute('aria-label', dark ? button.dataset.labelToLight! : button.dataset.labelToDark!);
+    button.title = dark ? button.dataset.titleLight! : button.dataset.titleDark!;
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]').forEach((button) => {
+    syncThemeToggle(button);
+    button.addEventListener('click', () => {
+      const dark = !document.documentElement.classList.contains('dark');
+      document.documentElement.classList.toggle('dark', dark);
+      try {
+        localStorage.setItem('theme', dark ? 'dark' : 'light');
+      } catch (_) {}
+      syncThemeToggle(button);
+    });
+  });
+</script>
