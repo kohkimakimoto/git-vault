@@ -586,7 +586,7 @@ export default function VaultTerminalDemo({ messages }: { messages: DemoMessages
               <p className="whitespace-pre-wrap text-[var(--fg)]">
                 <span className="text-[var(--navy)]">{typing.prompt} </span>
                 <span>{typing.text}</span>
-                <span className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 bg-[var(--accent)] align-middle animate-pulse" />
+                <span className="ml-0.5 inline-block h-[1em] w-[0.45em] bg-[var(--accent)] align-middle animate-pulse" />
               </p>
             )}
           </div>
