@@ -7,52 +7,106 @@ const { locale, alternates } = Astro.props;
 const messages = getMessages(locale);
 ---
 
-<label class="relative inline-flex h-9 items-center text-[var(--fg)]">
-  <span class="sr-only">{messages.common.language}</span>
-  <svg
-    viewBox="0 0 24 24"
-    class="pointer-events-none absolute left-2.5 hidden h-4 w-4 sm:block"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="1.6"
-    aria-hidden="true"
+<div class="relative" data-language-picker>
+  <button
+    type="button"
+    class="inline-flex h-9 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 text-sm text-[var(--fg)] transition hover:border-[var(--navy)]"
+    aria-label={messages.common.language}
+    aria-haspopup="listbox"
+    aria-expanded="false"
+    data-language-trigger
   >
-    <circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18z" />
-  </svg>
-  <select
-    data-language-picker
-    class="h-full cursor-pointer appearance-none rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] py-0 pl-2.5 pr-8 text-sm transition hover:border-[var(--navy)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] sm:pl-8"
+    <svg
+      viewBox="0 0 24 24"
+      class="hidden h-4 w-4 sm:block"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.6"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18z" />
+    </svg>
+    <span data-language-label>{languages[locale]}</span>
+    <svg
+      viewBox="0 0 24 24"
+      class="h-3.5 w-3.5 text-[var(--fg-muted)]"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      aria-hidden="true"
+    >
+      <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  </button>
+
+  <ul
+    class="absolute right-0 z-50 mt-2 hidden min-w-full rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] py-1 shadow-lg"
+    role="listbox"
+    aria-label={messages.common.language}
+    data-language-menu
   >
     {locales.map((code) => {
       const alternate = alternates.find((entry) => entry.locale === code);
-      return <option value={alternate?.href ?? ''} selected={code === locale} disabled={!alternate} lang={code}>
-        {languages[code]}{!alternate ? ` (${messages.common.untranslated})` : ''}
-      </option>;
+      const selected = code === locale;
+      const label = `${languages[code]}${!alternate ? ` (${messages.common.untranslated})` : ''}`;
+      return (
+        <li role="option" aria-selected={selected} aria-disabled={!alternate || undefined}>
+          {alternate ? (
+            <a
+              href={alternate.href}
+              lang={code}
+              class:list={[
+                'block whitespace-nowrap px-3 py-1.5 text-sm transition hover:bg-[var(--accent-soft)]',
+                selected ? 'font-medium text-[var(--fg)]' : 'text-[var(--fg-muted)]',
+              ]}
+              data-language-option
+            >
+              {label}
+            </a>
+          ) : (
+            <span lang={code} class="block cursor-not-allowed whitespace-nowrap px-3 py-1.5 text-sm text-[var(--fg-muted)] opacity-60">
+              {label}
+            </span>
+          )}
+        </li>
+      );
     })}
-  </select>
-  <svg
-    viewBox="0 0 24 24"
-    class="pointer-events-none absolute right-2 h-3.5 w-3.5 text-[var(--fg-muted)]"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="2"
-    aria-hidden="true"
-  >
-    <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round" />
-  </svg>
-</label>
+  </ul>
+</div>
 
 <script>
-  document.querySelectorAll<HTMLSelectElement>('[data-language-picker]').forEach((picker) => {
-    const currentValue = picker.value;
-    picker.addEventListener('change', () => {
-      if (!picker.value) return;
-      const target = new URL(picker.value, window.location.origin);
-      target.search = window.location.search;
-      target.hash = window.location.hash;
-      // Keep the current page's selection when restored from browser history.
-      picker.value = currentValue;
-      window.location.assign(target.href);
+  document.querySelectorAll<HTMLElement>('[data-language-picker]').forEach((root) => {
+    const trigger = root.querySelector<HTMLButtonElement>('[data-language-trigger]');
+    const menu = root.querySelector<HTMLElement>('[data-language-menu]');
+    if (!trigger || !menu) return;
+
+    function setOpen(open: boolean) {
+      menu!.classList.toggle('hidden', !open);
+      trigger!.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    trigger.addEventListener('click', (event) => {
+      event.stopPropagation();
+      setOpen(menu!.classList.contains('hidden'));
+    });
+
+    menu.querySelectorAll<HTMLAnchorElement>('[data-language-option]').forEach((option) => {
+      option.addEventListener('click', (event) => {
+        event.preventDefault();
+        const target = new URL(option.href, window.location.origin);
+        target.search = window.location.search;
+        target.hash = window.location.hash;
+        setOpen(false);
+        window.location.assign(target.href);
+      });
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!root.contains(event.target as Node)) setOpen(false);
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') setOpen(false);
     });
   });
 </script>

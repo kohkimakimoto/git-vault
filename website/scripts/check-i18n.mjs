@@ -26,17 +26,28 @@ function localized(locale, path = '') {
   return `${locale === defaultLocale ? '' : `/${locale}`}${path}` || '/';
 }
 
+function languageChoices(html) {
+  return [...html.matchAll(/<li\b[^>]*\brole="option"[^>]*>[\s\S]*?<\/li>/g)].map((match) => {
+    const item = match[0];
+    const link = item.match(/<a\b[^>]*>/);
+    const span = item.match(/<span\b[^>]*>/);
+    const target = attributes((link ?? span)?.[0] ?? '');
+    return {
+      lang: target.lang,
+      href: target.href,
+      selected: /\saria-selected(?:="true")?(?=[\s>])/.test(item) && !/\saria-selected="false"/.test(item),
+      disabled: !link,
+    };
+  });
+}
+
 for (const file of walk(dist).filter((path) => path.endsWith('.html'))) {
   const html = readFileSync(file, 'utf8');
   pages.set(publicPath(file), {
     html,
     ids: new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1])),
     links: [...html.matchAll(/<link\b[^>]*>/g)].map((match) => attributes(match[0])),
-    options: [...html.matchAll(/<option\b[^>]*>/g)].map((match) => ({
-      ...attributes(match[0]),
-      disabled: /\sdisabled(?:[\s=>])/.test(match[0]),
-      selected: /\sselected(?:[\s=>])/.test(match[0]),
-    })),
+    options: languageChoices(html),
   });
 }
 
@@ -90,20 +101,21 @@ for (const [path, page] of pages) {
     assert(canonical, `Missing canonical: ${path}`);
     assert.equal(new URL(canonical.href).pathname, path, `Wrong canonical: ${path}`);
     for (const option of page.options.filter((option) => !option.disabled)) {
-      assert(pages.has(option.value), `Language switch points to missing page: ${path} → ${option.value}`);
+      assert(pages.has(option.href), `Language switch points to missing page: ${path} → ${option.href}`);
       const alternate = page.links.find((link) => link.hreflang === option.lang);
       assert(alternate, `Missing hreflang ${option.lang}: ${path}`);
-      assert.equal(new URL(alternate.href).pathname, option.value, `Wrong alternate: ${path}`);
-      const reverse = pages.get(option.value).links.find((link) => link.hreflang === locale);
+      assert.equal(new URL(alternate.href).pathname, option.href, `Wrong alternate: ${path}`);
+      const reverse = pages.get(option.href).links.find((link) => link.hreflang === locale);
       assert.equal(reverse && new URL(reverse.href).pathname, path, `Non-reciprocal alternate: ${path}`);
     }
     const fallback = page.links.find((link) => link.hreflang === 'x-default');
-    assert.equal(fallback && new URL(fallback.href).pathname, page.options.find((option) => option.lang === defaultLocale)?.value, `Wrong x-default: ${path}`);
+    assert.equal(fallback && new URL(fallback.href).pathname, page.options.find((option) => option.lang === defaultLocale)?.href, `Wrong x-default: ${path}`);
   }
 
   for (const match of page.html.matchAll(/<a\b[^>]*>/g)) {
     const { href } = attributes(match[0]);
     if (!href || /^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(href)) continue;
+    const languageSwitch = /\sdata-language-option(?:[\s=>])/.test(match[0]);
     const target = new URL(href.replaceAll('&amp;', '&'), `https://example.test${path}`);
     const destination = pages.get(target.pathname);
     if (!destination) {
@@ -113,7 +125,7 @@ for (const [path, page] of pages) {
     if (target.hash) {
       assert(destination.ids.has(decodeURIComponent(target.hash.slice(1))), `Broken anchor: ${path} → ${href}`);
     }
-    if (target.pathname.includes('/docs/')) {
+    if (!languageSwitch && target.pathname.includes('/docs/')) {
       assert(target.pathname.startsWith(localized(locale, '/docs/')), `Link changes language: ${path} → ${href}`);
     }
   }
