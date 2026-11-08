@@ -1,0 +1,85 @@
+---
+import type { Messages } from '../i18n/utils';
+
+type NavLink = {
+  href: string;
+  label: string;
+};
+
+interface Props {
+  links: NavLink[];
+  messages: Messages['common'];
+}
+
+const { links, messages } = Astro.props;
+---
+
+<div class="relative md:hidden" data-mobile-nav>
+  <button
+    type="button"
+    class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--fg)]"
+    aria-expanded="false"
+    aria-label={messages.openNavigation}
+    data-mobile-nav-trigger
+    data-label-open={messages.openNavigation}
+    data-label-close={messages.closeNavigation}
+  >
+    <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" data-mobile-nav-icon-open>
+      <path d="M4 7h16M4 12h16M4 17h16"></path>
+    </svg>
+    <svg viewBox="0 0 24 24" class="hidden h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" data-mobile-nav-icon-close>
+      <path d="M6 6l12 12M18 6L6 18"></path>
+    </svg>
+  </button>
+
+  <nav
+    class="absolute right-0 z-40 mt-2 hidden w-48 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] p-2 shadow-lg"
+    aria-label={messages.mobileNavigation}
+    data-mobile-nav-menu
+  >
+    {links.map((link) => (
+      <a
+        href={link.href}
+        class="block rounded px-3 py-2 text-sm text-[var(--fg)] hover:bg-[var(--accent-soft)]"
+        data-mobile-nav-link
+      >
+        {link.label}
+      </a>
+    ))}
+  </nav>
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-mobile-nav]').forEach((root) => {
+    const trigger = root.querySelector<HTMLButtonElement>('[data-mobile-nav-trigger]');
+    const menu = root.querySelector<HTMLElement>('[data-mobile-nav-menu]');
+    const iconOpen = root.querySelector<HTMLElement>('[data-mobile-nav-icon-open]');
+    const iconClose = root.querySelector<HTMLElement>('[data-mobile-nav-icon-close]');
+    if (!trigger || !menu || !iconOpen || !iconClose) return;
+
+    function setOpen(open: boolean) {
+      menu!.classList.toggle('hidden', !open);
+      iconOpen!.classList.toggle('hidden', open);
+      iconClose!.classList.toggle('hidden', !open);
+      trigger!.setAttribute('aria-expanded', open ? 'true' : 'false');
+      trigger!.setAttribute('aria-label', open ? trigger!.dataset.labelClose! : trigger!.dataset.labelOpen!);
+    }
+
+    trigger.addEventListener('click', (event) => {
+      event.stopPropagation();
+      setOpen(menu.classList.contains('hidden'));
+    });
+
+    root.querySelectorAll('[data-mobile-nav-link]').forEach((link) => {
+      link.addEventListener('click', () => setOpen(false));
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!root.contains(event.target as Node)) setOpen(false);
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') setOpen(false);
+    });
+  });
+</script>

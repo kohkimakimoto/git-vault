@@ -1,6 +1,6 @@
 ---
-import ThemeToggle from './ThemeToggle';
-import MobileNav from './MobileNav';
+import ThemeToggle from './ThemeToggle.astro';
+import MobileNav from './MobileNav.astro';
 import DocsSearch from './DocsSearch';
 import LanguagePicker from './LanguagePicker.astro';
 import type { Locale, LanguageAlternate } from '../i18n/config';
@@ -49,12 +49,12 @@ const links = [
           <path d="M20 20l-3.5-3.5"></path>
         </svg>
         <span class="hidden sm:inline">{messages.docs.search}</span>
-        <kbd class="pointer-events-none hidden min-w-[2.75rem] justify-center rounded border border-[var(--border)] px-1.5 py-0.5 text-center font-mono text-[10px] text-[var(--fg-muted)] md:inline-flex" data-docs-search-shortcut>⌘K</kbd>
+        <kbd class="pointer-events-none hidden min-w-[2.75rem] justify-center rounded border border-[var(--border)] px-1.5 py-0.5 text-center font-mono text-[10px] text-[var(--fg-muted)] md:inline-flex" data-docs-search-shortcut></kbd>
       </button>
-      <DocsSearch client:load locale={locale} messages={messages.docs} />
+      <DocsSearch client:idle locale={locale} messages={messages.docs} />
       <LanguagePicker locale={locale} alternates={alternates} />
-      <ThemeToggle client:load messages={messages.common} />
-      <MobileNav client:load links={links} messages={messages.common} />
+      <ThemeToggle messages={messages.common} />
+      <MobileNav links={links} messages={messages.common} />
     </div>
   </div>
 </header>
