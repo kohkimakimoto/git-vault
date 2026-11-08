@@ -27,18 +27,20 @@ function localized(locale, path = '') {
 }
 
 function languageChoices(html) {
-  return [...html.matchAll(/<li\b[^>]*\brole="option"[^>]*>[\s\S]*?<\/li>/g)].map((match) => {
-    const item = match[0];
-    const link = item.match(/<a\b[^>]*>/);
-    const span = item.match(/<span\b[^>]*>/);
-    const target = attributes((link ?? span)?.[0] ?? '');
-    return {
-      lang: target.lang,
-      href: target.href,
-      selected: /\saria-selected(?:="true")?(?=[\s>])/.test(item) && !/\saria-selected="false"/.test(item),
-      disabled: !link,
-    };
-  });
+  return [...html.matchAll(/<ul\b[^>]*\bdata-language-menu\b[^>]*>[\s\S]*?<\/ul>/g)].flatMap((menu) =>
+    [...menu[0].matchAll(/<li\b[^>]*\brole="option"[^>]*>[\s\S]*?<\/li>/g)].map((match) => {
+      const item = match[0];
+      const link = item.match(/<a\b[^>]*>/);
+      const span = item.match(/<span\b[^>]*>/);
+      const target = attributes((link ?? span)?.[0] ?? '');
+      return {
+        lang: target.lang,
+        href: target.href,
+        selected: /\saria-selected(?:="true")?(?=[\s>])/.test(item) && !/\saria-selected="false"/.test(item),
+        disabled: !link,
+      };
+    }),
+  );
 }
 
 for (const file of walk(dist).filter((path) => path.endsWith('.html'))) {

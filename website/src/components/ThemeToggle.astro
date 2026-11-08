@@ -6,46 +6,178 @@ interface Props {
 }
 
 const { messages } = Astro.props;
+
+const options = [
+  { value: 'light', label: messages.lightMode },
+  { value: 'dark', label: messages.darkMode },
+  { value: 'system', label: messages.systemMode },
+] as const;
 ---
 
-<button
-  type="button"
-  class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--fg)] transition hover:border-[var(--navy)]"
-  aria-label={messages.switchToDark}
-  title={messages.darkMode}
-  data-theme-toggle
-  data-label-to-light={messages.switchToLight}
-  data-label-to-dark={messages.switchToDark}
-  data-title-light={messages.lightMode}
-  data-title-dark={messages.darkMode}
->
-  <!-- Visible in dark mode: click switches to light -->
-  <svg viewBox="0 0 24 24" class="hidden h-4 w-4 dark:block" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-    <circle cx="12" cy="12" r="4"></circle>
-    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
-  </svg>
-  <!-- Visible in light mode: click switches to dark -->
-  <svg viewBox="0 0 24 24" class="h-4 w-4 dark:hidden" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-    <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5z"></path>
-  </svg>
-</button>
+<div class="relative" data-theme-picker>
+  <button
+    type="button"
+    class="inline-flex h-9 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 text-[var(--fg)] transition hover:border-[var(--navy)]"
+    aria-label={messages.theme}
+    aria-haspopup="listbox"
+    aria-expanded="false"
+    title={messages.theme}
+    data-theme-trigger
+  >
+    <svg viewBox="0 0 24 24" class="hidden h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" data-theme-icon="light">
+      <circle cx="12" cy="12" r="4"></circle>
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+    </svg>
+    <svg viewBox="0 0 24 24" class="hidden h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" data-theme-icon="dark">
+      <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5z"></path>
+    </svg>
+    <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" data-theme-icon="system">
+      <rect x="3" y="4" width="18" height="12" rx="2"></rect>
+      <path d="M8 20h8M12 16v4" stroke-linecap="round"></path>
+    </svg>
+    <svg
+      viewBox="0 0 24 24"
+      class="h-3.5 w-3.5 text-[var(--fg-muted)]"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      aria-hidden="true"
+    >
+      <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"></path>
+    </svg>
+  </button>
+
+  <ul
+    class="absolute right-0 z-50 mt-2 hidden min-w-[9rem] rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] py-1 shadow-lg"
+    role="listbox"
+    aria-label={messages.theme}
+    data-theme-menu
+  >
+    {options.map((option) => (
+      <li role="option" aria-selected="false" data-theme-option={option.value}>
+        <button
+          type="button"
+          class="flex w-full items-center gap-2 whitespace-nowrap px-3 py-1.5 text-left text-sm text-[var(--fg-muted)] transition hover:bg-[var(--accent-soft)] hover:text-[var(--fg)]"
+          data-theme-option-button
+        >
+          {option.value === 'light' && (
+            <svg viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+            </svg>
+          )}
+          {option.value === 'dark' && (
+            <svg viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5z"></path>
+            </svg>
+          )}
+          {option.value === 'system' && (
+            <svg viewBox="0 0 24 24" class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="12" rx="2"></rect>
+              <path d="M8 20h8M12 16v4" stroke-linecap="round"></path>
+            </svg>
+          )}
+          <span>{option.label}</span>
+        </button>
+      </li>
+    ))}
+  </ul>
+</div>
+
+<script is:inline>
+  (function () {
+    try {
+      var stored = localStorage.getItem('theme');
+      var pref = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+      document.querySelectorAll('[data-theme-picker]').forEach(function (root) {
+        root.querySelectorAll('[data-theme-icon]').forEach(function (icon) {
+          icon.classList.toggle('hidden', icon.getAttribute('data-theme-icon') !== pref);
+        });
+      });
+    } catch (_) {}
+  })();
+</script>
 
 <script>
-  function syncThemeToggle(button: HTMLButtonElement) {
-    const dark = document.documentElement.classList.contains('dark');
-    button.setAttribute('aria-label', dark ? button.dataset.labelToLight! : button.dataset.labelToDark!);
-    button.title = dark ? button.dataset.titleLight! : button.dataset.titleDark!;
+  type ThemePref = 'light' | 'dark' | 'system';
+
+  function readThemePref(): ThemePref {
+    try {
+      const stored = localStorage.getItem('theme');
+      if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
+    } catch (_) {}
+    return 'system';
   }
 
-  document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]').forEach((button) => {
-    syncThemeToggle(button);
-    button.addEventListener('click', () => {
-      const dark = !document.documentElement.classList.contains('dark');
-      document.documentElement.classList.toggle('dark', dark);
-      try {
-        localStorage.setItem('theme', dark ? 'dark' : 'light');
-      } catch (_) {}
-      syncThemeToggle(button);
+  function resolvedDark(pref: ThemePref): boolean {
+    if (pref === 'dark') return true;
+    if (pref === 'light') return false;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+
+  function applyThemePref(pref: ThemePref) {
+    document.documentElement.classList.toggle('dark', resolvedDark(pref));
+    try {
+      localStorage.setItem('theme', pref);
+    } catch (_) {}
+  }
+
+  function syncThemePicker(root: HTMLElement, pref: ThemePref) {
+    root.querySelectorAll<HTMLElement>('[data-theme-icon]').forEach((icon) => {
+      icon.classList.toggle('hidden', icon.dataset.themeIcon !== pref);
+    });
+
+    root.querySelectorAll<HTMLElement>('[data-theme-option]').forEach((option) => {
+      const selected = option.dataset.themeOption === pref;
+      option.setAttribute('aria-selected', selected ? 'true' : 'false');
+      const button = option.querySelector<HTMLButtonElement>('[data-theme-option-button]');
+      if (!button) return;
+      button.classList.toggle('font-medium', selected);
+      button.classList.toggle('text-[var(--fg)]', selected);
+      button.classList.toggle('text-[var(--fg-muted)]', !selected);
+    });
+  }
+
+  const media = window.matchMedia('(prefers-color-scheme: dark)');
+  media.addEventListener('change', () => {
+    if (readThemePref() === 'system') applyThemePref('system');
+  });
+
+  document.querySelectorAll<HTMLElement>('[data-theme-picker]').forEach((root) => {
+    const trigger = root.querySelector<HTMLButtonElement>('[data-theme-trigger]');
+    const menu = root.querySelector<HTMLElement>('[data-theme-menu]');
+    if (!trigger || !menu) return;
+
+    syncThemePicker(root, readThemePref());
+
+    function setOpen(open: boolean) {
+      menu!.classList.toggle('hidden', !open);
+      trigger!.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    trigger.addEventListener('click', (event) => {
+      event.stopPropagation();
+      setOpen(menu.classList.contains('hidden'));
+    });
+
+    root.querySelectorAll<HTMLElement>('[data-theme-option]').forEach((option) => {
+      const button = option.querySelector<HTMLButtonElement>('[data-theme-option-button]');
+      const value = option.dataset.themeOption as ThemePref | undefined;
+      if (!button || !value) return;
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        applyThemePref(value);
+        syncThemePicker(root, value);
+        setOpen(false);
+      });
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!root.contains(event.target as Node)) setOpen(false);
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') setOpen(false);
     });
   });
 </script>
