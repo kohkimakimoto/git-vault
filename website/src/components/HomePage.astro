@@ -63,28 +63,19 @@ const home = messages.home;
         <li>
           <p class="font-mono text-xs tracking-wide text-[var(--accent)]">01</p>
           <h3 class="mt-2 text-lg font-semibold text-[var(--fg)]">
-            {home.encrypt}
+            {home.createVault}
           </h3>
           <p class="mt-2 text-sm text-[var(--fg-muted)]">
-            {home.encryptionBefore}
-            <a
-              href="https://github.com/FiloSottile/age"
-              class="text-[var(--accent)] underline underline-offset-2 hover:decoration-[var(--accent)]"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              age
-            </a>
-            {home.encryptionAfter}
+            {home.createVaultDescription}
           </p>
         </li>
         <li>
           <p class="font-mono text-xs tracking-wide text-[var(--accent)]">02</p>
           <h3 class="mt-2 text-lg font-semibold text-[var(--fg)]">
-            {home.commit}
+            {home.workFromBranch}
           </h3>
           <p class="mt-2 text-sm text-[var(--fg-muted)]">
-            {home.commitBefore}<code class="font-mono">git vault save</code>{home.commitAfter}
+            {home.workFromBranchDescription}
           </p>
         </li>
         <li>
