@@ -7,6 +7,7 @@ export const ja = {
     openNavigation: 'ナビゲーションを開く', closeNavigation: 'ナビゲーションを閉じる', mobileNavigation: 'モバイル',
     switchToLight: 'ライトモードに切り替え', switchToDark: 'ダークモードに切り替え',
     lightMode: 'ライトモード', darkMode: 'ダークモード', license: 'MITライセンス',
+    copyCode: 'クリップボードにコピー', copiedCode: 'Copied!',
   },
   docs: {
     guide: 'ガイド',
