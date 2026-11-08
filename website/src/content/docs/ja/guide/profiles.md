@@ -9,19 +9,19 @@ order: 4
 
 
 ```sh
-# Create a production profile with its own public key
+# 独自の公開鍵でproductionプロファイルを作成する
 git vault profile add production -r age...
 
-# Encrypt .env into the production profile
+# .envをproductionプロファイルに暗号化する
 git vault save -p production .env
 
-# List paths saved in the production profile
+# productionプロファイルに保存されたパスを一覧する
 git vault list -p production
 
-# List all profiles on the vault branch
+# vaultブランチ上の全プロファイルを一覧する
 git vault profile list
 
-# Restore .env from production
+# productionから.envを復元する
 git vault restore -p production -f .env
 ```
 

@@ -1,3 +1,5 @@
+export type TreeEnvState = 'present' | 'absent' | 'restored';
+
 export type DemoMessages = {
   workflowLabel: string;
   workflowTitle: string;
@@ -13,19 +15,28 @@ export type DemoMessages = {
   empty: string;
   encryptCallout: string;
   publishCallout: string;
-  anotherMachine: string;
+  saveScene: string;
+  restoreScene: string;
   fetchCallout: string;
   trackCallout: string;
   restoreCallout: string;
 };
 
 export type DemoStep =
-  | { kind: 'scene'; label: string; host: string }
+  | {
+      kind: 'scene';
+      label: string;
+      host: string;
+      tree?: TreeEnvState;
+      local?: boolean;
+      remote?: boolean;
+      fetched?: boolean;
+    }
   | { kind: 'prompt'; cwd?: string }
   | { kind: 'type'; text: string }
   | { kind: 'output'; lines: string[] }
   | { kind: 'callout'; text: string }
-  | { kind: 'tree'; env: 'present' | 'absent' | 'restored' }
+  | { kind: 'tree'; env: TreeEnvState }
   | {
       kind: 'vault';
       local?: boolean;
@@ -43,8 +54,6 @@ export type TerminalLine = {
   text: string;
 };
 
-export type TreeEnvState = 'present' | 'absent' | 'restored';
-
 export type VaultAnim = 'encrypt' | 'push' | 'fetch' | 'decrypt' | null;
 
 export type VaultVisualState = {
@@ -59,7 +68,7 @@ export const LINE_MS = 480;
 export const CALLOUT_HOLD_MS = 2200;
 
 export const SCENE_FADE_MS = 500;
-export const SCENE_HOLD_MS = 1600;
+export const SCENE_HOLD_MS = 2200;
 export const LOOP_PAUSE_MS = 3400;
 export const VAULT_ANIM_MS = 1400;
 
@@ -84,9 +93,16 @@ export const DEMO_STATIC_VAULT: VaultVisualState = {
 
 export function createVaultDemoScenario(messages: DemoMessages): DemoStep[] {
   return [
+    {
+      kind: 'scene',
+      label: messages.saveScene,
+      host: 'dev@laptop',
+      tree: 'present',
+      local: false,
+      remote: false,
+      fetched: false,
+    },
     { kind: 'clear' },
-    { kind: 'tree', env: 'present' },
-    { kind: 'vault', local: false, remote: false, anim: null },
     { kind: 'callout', text: messages.encryptCallout },
     { kind: 'prompt', cwd: '~/app' },
     { kind: 'type', text: 'git vault save .env' },
@@ -101,9 +117,15 @@ export function createVaultDemoScenario(messages: DemoMessages): DemoStep[] {
     { kind: 'vault', anim: 'push' },
     { kind: 'vault', remote: true, anim: null },
     { kind: 'pause', ms: 1000 },
-    { kind: 'scene', label: messages.anotherMachine, host: 'dev@ci' },
-    { kind: 'tree', env: 'absent' },
-    { kind: 'vault', local: false, remote: true, anim: null },
+    {
+      kind: 'scene',
+      label: messages.restoreScene,
+      host: 'dev@ci',
+      tree: 'absent',
+      local: false,
+      remote: true,
+      fetched: false,
+    },
     { kind: 'callout', text: messages.fetchCallout },
     { kind: 'prompt', cwd: '~/app' },
     { kind: 'type', text: 'git fetch origin vault' },

@@ -8,16 +8,16 @@ order: 8
 `-b`は操作対象のローカルvaultブランチ名を指定します。`init`はそのブランチを作成し、同名が既にある場合は拒否します。それ以外のコマンドは既存のブランチが必要です。ただし、対応している場合は`-n`を渡すと新規作成できます。
 
 ```sh
-# Update remote-tracking branches (including origin/vault)
+# リモート追跡ブランチを更新する（origin/vaultを含む）
 git fetch origin
 
-# Create a working branch from the fetched vault tip and save a change
+# fetchしたvaultの先端から作業ブランチを作り、変更を保存する
 git vault save -p production -b vault-update-db -n -B origin/vault .env
 
-# Add another commit to the existing working branch
+# 既存の作業ブランチにもう1つコミットを追加する
 git vault save -p production -b vault-update-db credentials.json
 
-# Publish the working branch for a pull request
+# プルリクエスト用に作業ブランチをpushする
 git push origin vault-update-db
 ```
 

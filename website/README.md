@@ -28,7 +28,7 @@ To add a language:
 4. Write documentation links using that language's public URL prefix. Preserve the English heading IDs with explicit HTML headings, such as `<h2 id="requirements">要件</h2>`, so links and language switching retain their fragments.
 5. Run `npm test` and check the language picker and layout in a browser.
 
-An article's language picker and `hreflang` links include only existing translations. Missing translations are shown as disabled choices. Shared assets and external links have no locale prefix. CLI commands, sample output, paths, and branch names stay unchanged in translated documentation and demos.
+An article's language picker and `hreflang` links include only existing translations. Missing translations are shown as disabled choices. Shared assets and external links have no locale prefix. CLI commands, sample output, paths, and branch names stay unchanged in translated documentation and demos. Comments inside code blocks are translation targets—localize them with the surrounding page.
 
 ## Production routing
 
