@@ -2,6 +2,7 @@
 import '../styles/global.css';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
+import CodeCopy from '../components/CodeCopy';
 import { defaultLocale, locales, type Locale, type LanguageAlternate } from '../i18n/config';
 import { getMessages, localizedPath, publicPath } from '../i18n/utils';
 
@@ -29,6 +30,7 @@ const ogImageURL = new URL('/og.png', Astro.site);
 const ogImageAlt = `${siteName} — ${description}`;
 const ogLocaleByLang: Record<Locale, string> = { en: 'en_US', ja: 'ja_JP' };
 const ogLocale = ogLocaleByLang[locale];
+const messages = getMessages(locale);
 ---
 
 <!doctype html>
@@ -88,6 +90,7 @@ const ogLocale = ogLocaleByLang[locale];
       <slot />
     </main>
     <Footer locale={locale} />
+    <CodeCopy client:load messages={messages.common} />
   </body>
 </html>
 
