@@ -5,6 +5,7 @@ export const en = {
     openNavigation: 'Open navigation', closeNavigation: 'Close navigation', mobileNavigation: 'Mobile',
     switchToLight: 'Switch to light mode', switchToDark: 'Switch to dark mode',
     lightMode: 'Light mode', darkMode: 'Dark mode', license: 'MIT License',
+    relatedProjects: 'Related projects',
     copyCode: 'Copy code to clipboard', copiedCode: 'Copied!',
   },
   docs: {
