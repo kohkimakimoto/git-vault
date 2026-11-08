@@ -52,6 +52,17 @@ for (const locale of locales) {
   assert(pages.has(localized(locale, '/404')), `Missing localized 404 for ${locale}`);
   const redirect = pages.get(localized(locale, '/docs'))?.html;
   assert(redirect?.includes(`url=${localized(locale, '/docs/guide/introduction')}`), `Wrong docs redirect for ${locale}`);
+
+  const searchIndexPath = `${dist}/search/${locale}.json`;
+  assert(existsSync(searchIndexPath), `Missing search index: ${locale}`);
+  const searchIndex = JSON.parse(readFileSync(searchIndexPath, 'utf8'));
+  assert.equal(searchIndex.locale, locale, `Wrong search index locale: ${locale}`);
+  assert.equal(searchIndex.documents?.length, docs.length, `Wrong search index size: ${locale}`);
+  for (const document of searchIndex.documents) {
+    assert(pages.has(document.href), `Search result points to missing page: ${locale} → ${document.href}`);
+    assert(document.title && document.description && document.body, `Incomplete search document: ${document.href}`);
+    assert(['guide', 'reference'].includes(document.section), `Bad search section: ${document.href}`);
+  }
 }
 
 assert(!pages.has(`/${defaultLocale}`), 'Default language must not have a prefix');
