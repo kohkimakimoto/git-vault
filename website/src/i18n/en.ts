@@ -23,7 +23,6 @@ export const en = {
     heading: 'Secrets on a separate Git branch',
     intro: 'Managing secrets such as API keys and passwords means balancing risk against operational cost. For smaller projects, encrypting them onto a separate orphan Git branch can be a practical choice—keeping secrets alongside your code without touching application history.',
     getStarted: 'Get started', readDocs: 'Read the docs',
-    demoNote: 'Demo assumes an initialized vault. Each machine has a configured identity with its public key registered as a recipient.',
     howItFits: 'How it fits',
     howItFitsDescription: 'git-vault is a Git subcommand that encrypts files into a dedicated orphan branch. Your working tree and application commits stay free of vault configuration and ciphertext.',
     createVault: 'Create the vault branch',
