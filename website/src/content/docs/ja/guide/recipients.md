@@ -10,22 +10,22 @@ order: 5
 各プロファイルは、受信者を`<profile>/recipients.json`にJSONとして保存します。CLIでは`-r` / `-R`で指定します。
 
 ```sh
-# List recipients in the production profile
+# productionプロファイルの受信者を一覧する
 git vault recipient list -p production
 
-# Same list as canonical JSON
+# 同じ一覧を正規化されたJSONで出力する
 git vault recipient list -p production --json
 
-# Add a public key with a label (re-encrypts saved files when needed)
+# ラベル付きで公開鍵を追加する（必要なら保存済みファイルを再暗号化する）
 git vault recipient add -p production -l "deploy bot" -r age...
 
-# Add public keys from a recipients file
+# 受信者ファイルから公開鍵を追加する
 git vault recipient add -p production -R teammates.txt
 
-# Remove a public key (re-encrypts saved files when needed)
+# 公開鍵を削除する（必要なら保存済みファイルを再暗号化する）
 git vault recipient remove -p production -r age...
 
-# Initialize a vault from a recipients file
+# 受信者ファイルからvaultを初期化する
 git vault init -R teammates.txt
 ```
 

@@ -342,7 +342,9 @@ export default function VaultTerminalDemo({ messages }: { messages: DemoMessages
       const scenarioDuration = scenario.reduce((total, step) => total + stepDuration(step), 0);
 
       while (!signal.cancelled) {
-        const cycleDuration = scenarioDuration + SCENE_FADE_MS + (loopIndex > 0 ? SCENE_FADE_MS : 0);
+        const startsWithScene = scenario[0]?.kind === 'scene';
+        const introFadeMs = loopIndex > 0 && !startsWithScene ? SCENE_FADE_MS : 0;
+        const cycleDuration = scenarioDuration + SCENE_FADE_MS + introFadeMs;
         let completedMs = 0;
         progressReporterRef.current?.(0);
 
@@ -364,13 +366,16 @@ export default function VaultTerminalDemo({ messages }: { messages: DemoMessages
         patchVault({ local: false, remote: false, fetched: false, anim: null });
         lineIdRef.current = 0;
 
-
-        if (loopIndex > 0) {
+        // When the scenario opens with a scene caption, stay hidden and let that
+        // step reveal the UI. Otherwise fade the panels back in first.
+        if (!startsWithScene) {
           setUiVisible(true);
-          await wait(SCENE_FADE_MS);
-          if (signal.cancelled) return;
+          if (introFadeMs > 0) {
+            await wait(introFadeMs);
+            if (signal.cancelled) return;
+          }
         } else {
-          setUiVisible(true);
+          setUiVisible(false);
         }
         loopIndex += 1;
 
@@ -390,8 +395,13 @@ export default function VaultTerminalDemo({ messages }: { messages: DemoMessages
               setLines([]);
               setTyping(null);
               // Swap environment while fully hidden
-              setTreeEnv('absent');
-              patchVault({ local: false, remote: true, fetched: false, anim: null });
+              setTreeEnv(step.tree ?? 'absent');
+              patchVault({
+                local: step.local ?? false,
+                remote: step.remote ?? true,
+                fetched: step.fetched ?? false,
+                anim: null,
+              });
               setSceneCaption(step.label);
 
               setUiVisible(true);

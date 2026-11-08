@@ -11,19 +11,19 @@ order: 6
 2. それ以外は`git config vault.identity`（後述）。
 
 ```sh
-# Restore with an explicit identity file
+# 明示的なidentityファイルで復元する
 git vault restore -i /path/to/identity .env
 
-# Read the identity from stdin via redirection
+# リダイレクトで標準入力からidentityを読む
 git vault restore -i - .env < /path/to/identity
 
-# Same via a pipe; -a restores every saved path in the profile
+# パイプでも同じ。-aはそのプロファイルの保存済みパスをすべて復元する
 cat /path/to/identity | git vault restore -a -i -
 
-# User-global default with a per-clone path
+# クローンごとのパスを使うユーザー全体の既定値
 git config --global vault.identity '$GIT_COMMON_DIR/vaultkey.age'
 
-# Restore using vault.identity
+# vault.identityを使って復元する
 git vault restore .env
 ```
 
@@ -41,7 +41,7 @@ git vault restore .env
 これらは設定値内のgit-vaultプレースホルダーであり、シェル変数や環境変数ではありません。未知の`$NAME` / `${NAME}`形式は拒否されます。各クローンが`.git/`配下に独自の鍵を持てるよう、`$GIT_COMMON_DIR`を使った**ユーザー全体**の設定を推奨します。
 
 ```sh
-# Once per user machine (quote so the shell leaves $… alone)
+# ユーザーマシンごとに一度（シェルが$…を展開しないようクォートする）
 git config --global vault.identity '$GIT_COMMON_DIR/vaultkey.age'
 ```
 
