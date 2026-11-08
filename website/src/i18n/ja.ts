@@ -25,7 +25,6 @@ export const ja = {
     heading: 'シークレットを独立したGitブランチへ',
     intro: 'APIキーやパスワードなどのシークレット管理では、リスクと運用コストのバランスが重要です。小規模なプロジェクトなら、独立したorphanブランチへ暗号化して保存し、アプリケーションの履歴を汚さずコードと一緒に扱う方法が実用的です。',
     getStarted: 'はじめる', readDocs: 'ドキュメントを読む',
-    demoNote: 'このデモは、vaultが初期化済みであることを前提としています。各マシンにはidentityが設定され、その公開鍵が受信者として登録されています。',
     howItFits: '仕組み',
     howItFitsDescription: 'git-vaultは、ファイルを暗号化して専用のorphanブランチに保存するGitサブコマンドです。作業ツリーとアプリケーションのコミットには、vaultの設定も暗号文も入りません。',
     createVault: 'vaultブランチを作る',
