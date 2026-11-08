@@ -66,6 +66,13 @@ for (const locale of locales) {
 }
 
 assert(!pages.has(`/${defaultLocale}`), 'Default language must not have a prefix');
+assert(existsSync(`${dist}/og.png`), 'Missing Open Graph image: /og.png');
+
+const home = pages.get('/');
+assert(home, 'Missing default home page');
+assert(home.html.includes('property="og:image"'), 'Missing og:image on home page');
+assert(home.html.includes('name="twitter:card"'), 'Missing twitter:card on home page');
+assert(home.html.includes('/og.png'), 'Home page og:image must point to /og.png');
 
 for (const [path, page] of pages) {
   if (path === '/docs' || locales.some((locale) => path === `/${locale}/docs`)) continue;
