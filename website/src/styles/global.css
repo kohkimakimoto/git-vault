@@ -395,6 +395,50 @@
   animation-play-state: paused !important;
 }
 
+/* Docs search modal: fade in/out for dialog + backdrop.
+   Keep flex centering on the base rule so close animation does not jump left
+   when the [open] attribute is removed. */
+.docs-search-dialog {
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  opacity: 0;
+  transition:
+    opacity 180ms ease-out,
+    overlay 180ms ease-out allow-discrete,
+    display 180ms allow-discrete;
+}
+
+.docs-search-dialog[open] {
+  display: flex;
+  opacity: 1;
+}
+
+@starting-style {
+  .docs-search-dialog[open] {
+    opacity: 0;
+  }
+}
+
+.docs-search-dialog::backdrop {
+  background: color-mix(in oklab, var(--fg) 35%, transparent);
+  opacity: 0;
+  transition:
+    opacity 180ms ease-out,
+    overlay 180ms ease-out allow-discrete,
+    display 180ms allow-discrete;
+}
+
+.docs-search-dialog[open]::backdrop {
+  opacity: 1;
+}
+
+@starting-style {
+  .docs-search-dialog[open]::backdrop {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-rise,
   .animate-rise-delay-1,
@@ -404,6 +448,11 @@
   .vault-anim-transfer,
   .callout-fade-in {
     animation: none;
+  }
+
+  .docs-search-dialog,
+  .docs-search-dialog::backdrop {
+    transition: none;
   }
 }
 
