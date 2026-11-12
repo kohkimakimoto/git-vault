@@ -10,7 +10,7 @@ const messages = getMessages(locale);
 <div class="relative" data-language-picker>
   <button
     type="button"
-    class="inline-flex h-9 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 text-sm text-[var(--fg)] transition hover:border-[var(--navy)]"
+    class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 text-sm text-[var(--fg)] transition hover:border-[var(--navy)]"
     aria-label={messages.common.language}
     aria-haspopup="listbox"
     aria-expanded="false"
@@ -18,7 +18,7 @@ const messages = getMessages(locale);
   >
     <svg
       viewBox="0 0 24 24"
-      class="hidden h-4 w-4 sm:block"
+      class="h-4 w-4"
       fill="none"
       stroke="currentColor"
       stroke-width="1.6"
@@ -26,7 +26,7 @@ const messages = getMessages(locale);
     >
       <circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18z" />
     </svg>
-    <span data-language-label>{languages[locale]}</span>
+    <span class="hidden whitespace-nowrap sm:inline" data-language-label>{languages[locale]}</span>
     <svg
       viewBox="0 0 24 24"
       class="h-3.5 w-3.5 text-[var(--fg-muted)]"
@@ -40,7 +40,7 @@ const messages = getMessages(locale);
   </button>
 
   <ul
-    class="absolute right-0 z-50 mt-2 hidden min-w-full rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] py-1 shadow-lg"
+    class="absolute right-0 z-50 mt-2 hidden min-w-max rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] py-1 shadow-lg"
     role="listbox"
     aria-label={messages.common.language}
     data-language-menu
