@@ -30,6 +30,12 @@ Do not put application code here. Use `git vault` to read and update this branch
 
 VAULT_README_NAME = "README.md"
 
+VAULT_GITATTRIBUTES = "**/files/** binary\n"
+
+VAULT_GITATTRIBUTES_NAME = ".gitattributes"
+
+VAULT_ROOT_NAMES = frozenset({VAULT_README_NAME, VAULT_GITATTRIBUTES_NAME})
+
 SKILL_CONTENT = """---
 name: git-vault
 description: Save and restore encrypted project files with git-vault, including profiles, recipients, and working branches for pull requests. Use when a project uses git-vault or the user asks to manage files with git vault.
@@ -53,7 +59,7 @@ If git-vault is missing from PATH, consult the official [installation instructio
 
 ## Choose the target
 
-Default branch `vault`, default profile `default`. Each profile is a root directory with public keys at `<profile>/recipients.json` and ciphertext at `<profile>/files/<original-path>`. The branch root `README.md` explains the vault. A recipient is one age public key. Before updating an existing vault, inspect it:
+Default branch `vault`, default profile `default`. Each profile is a root directory with public keys at `<profile>/recipients.json` and ciphertext at `<profile>/files/<original-path>`. The branch root `README.md` explains the vault. `.gitattributes` marks ciphertext under `<profile>/files/` as binary. A recipient is one age public key. Before updating an existing vault, inspect it:
 
 ```sh
 git vault profile list
@@ -201,7 +207,7 @@ def run(command, data=None, cwd=None, check=True, private=False):
 
 
 def valid_profile(name):
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name) or name == VAULT_README_NAME:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name) or name in VAULT_ROOT_NAMES:
         raise VaultError(f"Invalid profile name: {name}", 2)
     return name
 
@@ -616,7 +622,7 @@ class Repository:
                 raise VaultError(f"Unsupported vault tree entry: {name}")
             parts = name.split("/")
             if len(parts) < 2:
-                if name == VAULT_README_NAME:
+                if name in VAULT_ROOT_NAMES:
                     continue
                 raise VaultError(f"Not a vault tree: unexpected entry {name}")
             profile_name = valid_profile(parts[0])
@@ -649,7 +655,10 @@ class Repository:
         return profiles
 
     def tree(self, profiles):
-        flat = {VAULT_README_NAME: self.hash_blob(VAULT_README.encode())}
+        flat = {
+            VAULT_README_NAME: self.hash_blob(VAULT_README.encode()),
+            VAULT_GITATTRIBUTES_NAME: self.hash_blob(VAULT_GITATTRIBUTES.encode()),
+        }
         for name, profile in profiles.items():
             base = f"{name}/"
             flat[base + "recipients.json"] = self.hash_blob(dump_recipients_json(profile.recipients).encode())
@@ -1024,7 +1033,7 @@ def execute(args):
                 raise VaultError(f"File is not saved in this profile: {name}")
         for name in names:
             del profile.files[name]
-    else:
+    elif names:
         tracked = repo.tracked()
         paths = []
         for name in names:
@@ -1038,8 +1047,9 @@ def execute(args):
         for name, path in zip(names, paths):
             profile.files[name] = repo.hash_blob(encrypt(path.read_bytes(), keys))
     if not names:
-        print("No files.")
-        return
+        if args.operation != "save":
+            print("No files.")
+            return
     repo.commit(ref, old_oid, parent, profiles, message)
 
 

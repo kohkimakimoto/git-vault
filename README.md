@@ -377,7 +377,7 @@ Paths are relative to the current directory; `-a` uses stored repository-relativ
 git vault init [options] (-r KEY | -R PATH) [-l TEXT]...
 ```
 
-Create a local orphan vault branch (default name `vault`) with a `default` profile and a root `README.md` describing the branch. The branch must not already exist. Recipients are required via `-r` or `-R`.
+Create a local orphan vault branch (default name `vault`) with a `default` profile, a root `README.md` describing the branch, and `.gitattributes` so Git treats ciphertext as binary. The branch must not already exist. Recipients are required via `-r` or `-R`.
 
 | Option | Purpose |
 | --- | --- |
@@ -645,9 +645,10 @@ Use `-o` without a path to write `.agents/skills/git-vault/SKILL.md`, or pass an
 
 ## Storage and scope
 
-Each profile occupies a directory at the root of the vault branch. A `README.md` at that root explains that the branch is managed by git-vault:
+Each profile occupies a directory at the root of the vault branch. A `README.md` at that root explains that the branch is managed by git-vault. `.gitattributes` marks ciphertext as binary so Git and GitHub do not treat it as text:
 
 ```text
+.gitattributes
 README.md
 default/
   recipients.json
@@ -659,7 +660,7 @@ production/
     .env
 ```
 
-Ciphertext lives under `<profile>/files/` at the original relative path. Recipients are canonical JSON (`version` 1) with `key` and optional `label`. File names, sizes, profile names, labels, and Git metadata are visible in the repository. `README.md` at the branch root is reserved and cannot be a profile name.
+Ciphertext lives under `<profile>/files/` at the original relative path. Recipients are canonical JSON (`version` 1) with `key` and optional `label`. File names, sizes, profile names, labels, and Git metadata are visible in the repository. git-vault rewrites the root `README.md` and `.gitattributes` on every commit. `README.md` at the branch root is reserved and cannot be a profile name.
 
 Intended for small regular files in the working tree on macOS or Linux. Restored files have mode `0600`; newly created directories have mode `0700`.
 

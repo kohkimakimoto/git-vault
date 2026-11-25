@@ -9,7 +9,7 @@ order: 2
 git vault init [options] (-r KEY | -R PATH) [-l TEXT]...
 ```
 
-ローカルのorphan vaultブランチ（デフォルト名`vault`）を、`default`プロファイルと、ブランチを説明するルートの`README.md`付きで作成します。ブランチはまだ存在していてはいけません。受信者は`-r`または`-R`で必須です。
+ローカルのorphan vaultブランチ（デフォルト名`vault`）を、`default`プロファイル、ブランチを説明するルートの`README.md`、および暗号化ファイルをGitがバイナリとして扱うための`.gitattributes`付きで作成します。ブランチはまだ存在していてはいけません。受信者は`-r`または`-R`で必須です。
 
 | オプション | 説明 |
 | --- | --- |

@@ -3,8 +3,9 @@
 source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
 git vault init -r "$RECIPIENT1"
 git show vault:README.md | grep -q 'managed by'
+assert_eq "$(git show vault:.gitattributes)" $'**/files/** binary'
 git vault profile add production -r "$RECIPIENT2"
-assert_eq "$(git ls-tree --name-only vault)" $'README.md\ndefault\nproduction'
+assert_eq "$(git ls-tree --name-only vault)" $'.gitattributes\nREADME.md\ndefault\nproduction'
 expect_exit 2 git vault profile add README.md -r "$RECIPIENT1"
 printf 'production secret\n' >.env
 git vault save --profile production .env

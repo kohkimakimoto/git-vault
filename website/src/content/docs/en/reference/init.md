@@ -9,7 +9,7 @@ order: 2
 git vault init [options] (-r KEY | -R PATH) [-l TEXT]...
 ```
 
-Create a local orphan vault branch (default name `vault`) with a `default` profile and a root `README.md` describing the branch. The branch must not already exist. Recipients are required via `-r` or `-R`.
+Create a local orphan vault branch (default name `vault`) with a `default` profile, a root `README.md` describing the branch, and `.gitattributes` so Git treats ciphertext as binary. The branch must not already exist. Recipients are required via `-r` or `-R`.
 
 | Option | Purpose |
 | --- | --- |
